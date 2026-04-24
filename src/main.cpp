@@ -2,6 +2,7 @@
 #include "pet.h"
 #include "display.h"
 #include "claude_client.h"
+#include "char_anim.h"
 
 static Pet pet = {"Fido", 80, 80, 100, 0, PetMood::Happy};
 
@@ -57,4 +58,8 @@ void loop() {
         displayPet(pet);
         displayMenu();
     }
+
+    // Character animation (~60fps target)
+    charAnimUpdate();
+    delay(16);
 }
