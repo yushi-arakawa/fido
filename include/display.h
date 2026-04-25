@@ -1,6 +1,8 @@
 #pragma once
 #include "pet.h"
 
-void displayPet(const Pet& pet);
+enum class UIMode { Status, Action };
+
+void displayLeftPanel(const Pet& pet, UIMode mode, int selection);
 void displayMessage(const String& msg);
-void displayMenu();
+void displayMenu(UIMode mode, int selection);

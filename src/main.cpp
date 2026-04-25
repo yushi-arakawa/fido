@@ -4,16 +4,35 @@
 #include "claude_client.h"
 #include "char_anim.h"
 
-static Pet pet = {"Fido", 80, 80, 100, 0, PetMood::Happy};
+static Pet    pet       = {"Fido", 80, 80, 100, 0, PetMood::Happy};
+static UIMode uiMode    = UIMode::Status;
+static int    actionIdx = 0;
 
-static unsigned long lastTick  = 0;
-static const unsigned long TICK_MS = 30000; // 30 sec = 1 game cycle
+static unsigned long lastTick = 0;
+static const unsigned long TICK_MS = 30000;
 
-static void handleTalk() {
-    displayMessage("Asking Claude...");
-    String reply = askClaude(pet, "How are you feeling right now?");
-    if (reply.isEmpty()) reply = "(no response)";
-    displayMessage(reply);
+static void doAction(int idx) {
+    switch (idx) {
+        case 0: // Feed
+            pet.hunger    = min(100, (int)pet.hunger    + 30);
+            pet.happiness = min(100, (int)pet.happiness + 5);
+            pet.mood      = pet.calcMood();
+            displayLeftPanel(pet, uiMode, actionIdx);
+            displayMessage("Yum! Nom nom nom...");
+            break;
+        case 1: // Play
+            pet.happiness = min(100, (int)pet.happiness + 20);
+            pet.hunger    = max(0,   (int)pet.hunger    - 10);
+            pet.mood      = pet.calcMood();
+            displayLeftPanel(pet, uiMode, actionIdx);
+            displayMessage("Wheee! So fun!");
+            break;
+        case 2: // Talk
+            displayMessage("...");
+            displayMessage(askClaude(pet, "How are you feeling?"));
+            break;
+    }
+    displayMenu(uiMode, actionIdx);
 }
 
 void setup() {
@@ -21,45 +40,41 @@ void setup() {
     M5.Lcd.setTextColor(WHITE, BLACK);
     M5.Lcd.fillScreen(BLACK);
     lastTick = millis();
-    displayPet(pet);
-    displayMenu();
+    displayLeftPanel(pet, uiMode, actionIdx);
+    displayMessage("Hello! I'm Fido!");
+    displayMenu(uiMode, actionIdx);
 }
 
 void loop() {
     M5.update();
 
-    if (M5.BtnA.wasPressed()) {          // Feed
-        pet.hunger    = min(100, (int)pet.hunger    + 30);
-        pet.happiness = min(100, (int)pet.happiness + 5);
-        pet.mood      = pet.calcMood();
-        displayPet(pet);
-        displayMessage("Yum! Nom nom nom...");
-        displayMenu();
+    // Right button: toggle Status / Action mode
+    if (M5.BtnC.wasPressed()) {
+        uiMode = (uiMode == UIMode::Status) ? UIMode::Action : UIMode::Status;
+        displayLeftPanel(pet, uiMode, actionIdx);
+        displayMenu(uiMode, actionIdx);
     }
 
-    if (M5.BtnB.wasPressed()) {          // Play
-        pet.happiness = min(100, (int)pet.happiness + 20);
-        pet.hunger    = max(0,   (int)pet.hunger    - 10);
-        pet.mood      = pet.calcMood();
-        displayPet(pet);
-        displayMessage("Wheee! So fun!");
-        displayMenu();
+    // Left button: move selection (Action mode only)
+    if (M5.BtnA.wasPressed() && uiMode == UIMode::Action) {
+        actionIdx = (actionIdx + 1) % 3;
+        displayLeftPanel(pet, uiMode, actionIdx);
+        displayMenu(uiMode, actionIdx);
     }
 
-    if (M5.BtnC.wasPressed()) {          // Talk to Claude
-        handleTalk();
-        displayMenu();
+    // Middle button: confirm (Action mode only)
+    if (M5.BtnB.wasPressed() && uiMode == UIMode::Action) {
+        doAction(actionIdx);
     }
 
     // Game tick
     if (millis() - lastTick >= TICK_MS) {
         lastTick = millis();
         pet.tick();
-        displayPet(pet);
-        displayMenu();
+        displayLeftPanel(pet, uiMode, actionIdx);
+        displayMenu(uiMode, actionIdx);
     }
 
-    // Character animation (~60fps target)
     charAnimUpdate();
     delay(16);
 }
