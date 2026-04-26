@@ -2,15 +2,13 @@
 #include "char_anim.h"
 #include <M5Stack.h>
 
-// Layout constants
 static const int STAT_X    = 5;
-static const int STAT_W    = 155;
 static const int MSG_Y     = 155;
 static const int MSG_H     = 58;
 static const int MENU_Y    = 218;
 static const int PANEL_DIV = 165;
 
-static const uint16_t BORDER_COL = 0x05BF; // steel-blue
+static const uint16_t BORDER_COL = 0x05BF;
 
 static void drawAllBorders() {
     M5.Lcd.drawRect(0,         0,     PANEL_DIV,       MSG_Y, BORDER_COL);
@@ -28,69 +26,99 @@ static const char* moodLabel(PetMood m) {
     }
 }
 
-static uint16_t statBar(uint8_t val) {
-    if (val > 66) return GREEN;
-    if (val > 33) return YELLOW;
+static uint16_t barColor(uint8_t v) {
+    if (v > 66) return GREEN;
+    if (v > 33) return YELLOW;
     return RED;
 }
 
 static void drawBar(int x, int y, uint8_t val) {
-    int filled = map(val, 0, 100, 0, 80);
-    M5.Lcd.fillRect(x,          y, filled,      6, statBar(val));
-    M5.Lcd.fillRect(x + filled, y, 80 - filled, 6, DARKGREY);
+    int filled = map(val, 0, 100, 0, 76);
+    M5.Lcd.fillRect(x,          y, filled,      5, barColor(val));
+    M5.Lcd.fillRect(x + filled, y, 76 - filled, 5, DARKGREY);
 }
 
-static void drawStatusPanel(const Pet& pet) {
+static void drawStatusPanel(const Pet& pet, const Inventory& inv) {
+    M5.Lcd.setTextColor(WHITE, BLACK);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(STAT_X, 6);
+    M5.Lcd.print(pet.name);
+
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setCursor(STAT_X, 26);
+    M5.Lcd.printf("Day %-3d  $%d", pet.age, inv.coins);
+
+    M5.Lcd.drawFastHLine(1, 36, PANEL_DIV - 2, DARKGREY);
+
+    M5.Lcd.setCursor(STAT_X, 42); M5.Lcd.print("Hunger");
+    drawBar(STAT_X, 52, pet.hunger);
+
+    M5.Lcd.setCursor(STAT_X, 62); M5.Lcd.print("Happy");
+    drawBar(STAT_X, 72, pet.happiness);
+
+    M5.Lcd.setCursor(STAT_X, 82); M5.Lcd.print("Health");
+    drawBar(STAT_X, 92, pet.health);
+
+    M5.Lcd.drawFastHLine(1, 104, PANEL_DIV - 2, DARKGREY);
+
+    M5.Lcd.setCursor(STAT_X, 108);
+    M5.Lcd.printf("%-10s", moodLabel(pet.mood));
+
+    M5.Lcd.drawFastHLine(1, 120, PANEL_DIV - 2, DARKGREY);
+
+    // Owned items
+    M5.Lcd.setCursor(STAT_X, 124);
+    M5.Lcd.setTextColor(TFT_CYAN, BLACK);
+    M5.Lcd.print("Items:");
     M5.Lcd.setTextColor(WHITE, BLACK);
 
-    M5.Lcd.setCursor(STAT_X, 8);
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.print(pet.name);
-    M5.Lcd.setTextSize(1);
-    M5.Lcd.setCursor(STAT_X, 30);
-    M5.Lcd.printf("Day %d", pet.age);
-
-    M5.Lcd.setCursor(STAT_X, 55);  M5.Lcd.print("Hunger");
-    drawBar(STAT_X, 65, pet.hunger);
-
-    M5.Lcd.setCursor(STAT_X, 80);  M5.Lcd.print("Happy");
-    drawBar(STAT_X, 90, pet.happiness);
-
-    M5.Lcd.setCursor(STAT_X, 105); M5.Lcd.print("Health");
-    drawBar(STAT_X, 115, pet.health);
-
-    M5.Lcd.setCursor(STAT_X, 135);
-    M5.Lcd.printf("%-10s", moodLabel(pet.mood));
+    int ix = STAT_X, iy = 134;
+    bool anyOwned = false;
+    for (int i = 0; i < ITEM_COUNT; i++) {
+        if (!inv.owned[i]) continue;
+        anyOwned = true;
+        int w = strlen(ITEM_DEFS[i].name) * 6 + 2;
+        if (ix + w > PANEL_DIV - 4) { ix = STAT_X; iy += 10; }
+        M5.Lcd.setCursor(ix, iy);
+        M5.Lcd.print(ITEM_DEFS[i].name);
+        ix += w + 2;
+    }
+    if (!anyOwned) {
+        M5.Lcd.setCursor(STAT_X, 134);
+        M5.Lcd.setTextColor(DARKGREY, BLACK);
+        M5.Lcd.print("none");
+        M5.Lcd.setTextColor(WHITE, BLACK);
+    }
 }
 
-static const char* ACTION_LABELS[] = { "Feed", "Play", "Talk" };
+static const char* ACTION_LABELS[] = { "Feed", "Play", "Talk", "Game", "Shop" };
+static const int   ACTION_COUNT    = 5;
 
 static void drawActionPanel(int selection) {
-    M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(WHITE, BLACK);
-    M5.Lcd.setCursor(STAT_X, 8);
     M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(STAT_X, 6);
     M5.Lcd.print("Action");
     M5.Lcd.setTextSize(1);
 
-    for (int i = 0; i < 3; i++) {
-        int y = 50 + i * 28;
+    for (int i = 0; i < ACTION_COUNT; i++) {
+        int y = 36 + i * 22;
         bool sel = (i == selection);
-        M5.Lcd.fillRect(1, y - 2, PANEL_DIV - 2, 24, sel ? DARKGREY : BLACK);
+        M5.Lcd.fillRect(1, y - 1, PANEL_DIV - 2, 20, sel ? DARKGREY : BLACK);
         M5.Lcd.setTextColor(sel ? YELLOW : WHITE, sel ? DARKGREY : BLACK);
-        M5.Lcd.setCursor(STAT_X, y);
         M5.Lcd.setTextSize(2);
+        M5.Lcd.setCursor(STAT_X, y);
         M5.Lcd.printf("%s %s", sel ? ">" : " ", ACTION_LABELS[i]);
     }
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(WHITE, BLACK);
 }
 
-void displayLeftPanel(const Pet& pet, UIMode mode, int selection) {
+void displayLeftPanel(const Pet& pet, UIMode mode, int selection, const Inventory& inv) {
     M5.Lcd.fillRect(1, 1, PANEL_DIV - 2, MSG_Y - 2, BLACK);
 
     if (mode == UIMode::Status) {
-        drawStatusPanel(pet);
+        drawStatusPanel(pet, inv);
     } else {
         drawActionPanel(selection);
     }
@@ -115,10 +143,12 @@ void displayMenu(UIMode mode, int /*selection*/) {
     M5.Lcd.setTextColor(WHITE, BLACK);
 
     if (mode == UIMode::Status) {
-        M5.Lcd.setCursor(250, MENU_Y + 4); M5.Lcd.print("[Switch]");
+        M5.Lcd.setCursor(10,  MENU_Y + 4); M5.Lcd.print("[Pwr]");
+        M5.Lcd.setCursor(130, MENU_Y + 4); M5.Lcd.print("[Card]");
+        M5.Lcd.setCursor(240, MENU_Y + 4); M5.Lcd.print("[Action]");
     } else {
         M5.Lcd.setCursor(10,  MENU_Y + 4); M5.Lcd.print("[Move]");
         M5.Lcd.setCursor(130, MENU_Y + 4); M5.Lcd.print("[OK]");
-        M5.Lcd.setCursor(244, MENU_Y + 4); M5.Lcd.print("[Status]");
+        M5.Lcd.setCursor(240, MENU_Y + 4); M5.Lcd.print("[Status]");
     }
 }
