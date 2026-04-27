@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pio run *)",
+      "Bash(gh repo *)",
+      "Bash(/c/Program Files/GitHub CLI/gh.exe auth *)",
+      "Bash(/c/Program Files/GitHub CLI/gh.exe repo *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(/c/Program Files/GitHub CLI/gh.exe api *)",
+      "Bash(git config *)",
+      "Bash(python3 -m pip install pillow -q)",
+      "Bash(python3 -c \"import PIL; print\\(PIL.__version__\\)\")",
+      "PowerShell(python -c \"from PIL import Image; print\\('ok'\\)\")",
+      "PowerShell(pip install pillow 2>&1)",
+      "PowerShell(tail -3)",
+      "PowerShell(python tools/png_to_rgb565.py)",
+      "Bash(python -c ' *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" repo set-default yushi-arakawa/fido)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git merge dev --no-ff -m ' *)"
+    ]
+  }
+}

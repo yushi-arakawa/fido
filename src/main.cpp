@@ -53,7 +53,7 @@ static void doAction(int idx) {
             displayMessage(askClaude(pet, "How are you feeling?"));
             break;
         case 3: { // Game
-            uint16_t earned = runMiniGame();
+            uint16_t earned = runGameMenu();
             inv.coins += earned;
             saveAll(pet, inv);
             returnFromFullscreen("Game over! +" + String(earned) + " coins");

@@ -2,7 +2,7 @@
 #include <Arduino.h>
 #include "pet.h"
 
-static const int ITEM_COUNT = 4;
+static const int ITEM_COUNT = 14;
 
 struct ItemDef {
     const char* name;
@@ -18,7 +18,7 @@ extern const ItemDef ITEM_DEFS[ITEM_COUNT];
 struct Inventory {
     uint16_t coins;
     uint16_t bond;           // 絆レベル (0-1000)
-    bool     owned[ITEM_COUNT];
+    bool     owned[14]; // fixed size to keep NVS keys stable even if ITEM_COUNT changes
 };
 
 void saveAll(const Pet& pet, const Inventory& inv);

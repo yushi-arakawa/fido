@@ -2,10 +2,20 @@
 #include <Preferences.h>
 
 const ItemDef ITEM_DEFS[ITEM_COUNT] = {
-    {"Apple",   3,  "+20 Hunger",  20,  0,   0 },
-    {"Ball",    5,  "+15 Happy",    0, 15,   0 },
-    {"Bandage", 8,  "+30 Health",   0,  0,  30 },
-    {"Crown",  20,  "+5 All",       5,  5,   5 },
+    {"Apple",    3,  "+20 Hunger",    20,  0,   0 },
+    {"Ball",     5,  "+15 Happy",      0, 15,   0 },
+    {"Bandage",  8,  "+30 Health",     0,  0,  30 },
+    {"Crown",   20,  "+5 All",         5,  5,   5 },
+    {"Cookie",   4,  "+25 Hunger",    25,  5,   0 },
+    {"Candy",    3,  "+10 Happy",      5, 10,   0 },
+    {"Teddy",    7,  "+20 Happy",      0, 20,   0 },
+    {"Vitamin",  6,  "+15 Health",     0,  5,  15 },
+    {"Potion",  12,  "+20 Health",     0,  0,  20 },
+    {"Steak",   10,  "+35 Hunger",    35,  5,   0 },
+    {"Toy Car",  8,  "+25 Happy",      0, 25,   0 },
+    {"P.Hat",    5,  "+10 All",        5, 10,   5 },
+    {"Elixir",  25,  "+30 All",       30, 30,  30 },
+    {"Star",    30,  "+max Happy",     0, 50,  10 },
 };
 
 void applyItem(Pet& pet, int idx) {

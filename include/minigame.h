@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
 
-// Runs a full-screen reaction mini-game.
-// Returns coins earned (0-15).
-uint16_t runMiniGame();
+// Shows a game selection menu and runs the chosen mini-game.
+// Returns coins earned.
+uint16_t runGameMenu();
