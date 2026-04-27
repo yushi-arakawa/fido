@@ -5,17 +5,16 @@
 // ── helpers ────────────────────────────────────────────────────────────────
 
 static void msgScreen(const char* line1, const char* line2 = nullptr, uint32_t wait = 2000) {
-    M5.Lcd.fillScreen(TFT_BLACK);
+    spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
-    // Title banner
-    M5.Lcd.fillRect(0, 72, 320, 46, SP_HDR_BG);
-    spCornerFrame(0, 72, 320, 46, SP_NEON_C);
-    M5.Lcd.setTextColor(SP_NEON_Y, SP_HDR_BG);
+    M5.Lcd.fillRect(0, 72, 320, 46, SM_HDR);
+    spCornerFrame(0, 72, 320, 46);
+    M5.Lcd.setTextColor(SM_WHITE, SM_HDR);
     M5.Lcd.setTextSize(2);
     M5.Lcd.setCursor(20, 82);
     M5.Lcd.print(line1);
     if (line2) {
-        M5.Lcd.setTextColor(SP_DIM_C, TFT_BLACK);
+        M5.Lcd.setTextColor(SM_GREY, SM_BG);
         M5.Lcd.setTextSize(1);
         M5.Lcd.setCursor(20, 132);
         M5.Lcd.print(line2);
@@ -24,17 +23,17 @@ static void msgScreen(const char* line1, const char* line2 = nullptr, uint32_t w
 }
 
 static void showResult(uint16_t earned) {
-    M5.Lcd.fillScreen(TFT_BLACK);
+    spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
-    M5.Lcd.setTextColor(SP_NEON_M, TFT_BLACK);
+    M5.Lcd.setTextColor(SM_GREY, SM_BG);
     M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(50, 80);
-    M5.Lcd.print("MISSION COMPLETE");
-    M5.Lcd.setTextColor(SP_NEON_Y, TFT_BLACK);
+    M5.Lcd.setCursor(60, 85);
+    M5.Lcd.print("Game Over");
+    M5.Lcd.setTextColor(SM_WHITE, SM_BG);
     M5.Lcd.setTextSize(3);
-    M5.Lcd.setCursor(50, 110);
+    M5.Lcd.setCursor(55, 115);
     M5.Lcd.printf("+%d coins!", earned);
-    spCornerFrame(0, 0, 320, 240, SP_NEON_M);
+    spCornerFrame(0, 0, 320, 240);
     delay(2000);
 }
 
@@ -648,17 +647,15 @@ static const GameEntry GAMES[] = {
 static const int GAME_COUNT = (int)(sizeof(GAMES) / sizeof(GAMES[0]));
 static const int VISIBLE = 5;
 
-static void drawGameMenu(int sel) {
-    M5.Lcd.fillScreen(TFT_BLACK);
-    spDrawStarfield(0, 0, 320, 240);
-
-    // Header
-    M5.Lcd.fillRect(0, 0, 320, 28, SP_HDR_BG);
-    M5.Lcd.setTextColor(SP_NEON_Y, SP_HDR_BG);
+// Content-only redraw — does NOT touch the background.
+static void drawGameMenuContent(int sel) {
+    // Header strip
+    M5.Lcd.fillRect(0, 0, 320, 28, SM_HDR);
+    M5.Lcd.setTextColor(SM_WHITE, SM_HDR);
     M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(60, 6);
-    M5.Lcd.print("MINI GAMES");
-    M5.Lcd.drawFastHLine(0, 28, 320, SP_NEON_C);
+    M5.Lcd.setCursor(80, 6);
+    M5.Lcd.print("Mini Games");
+    M5.Lcd.drawFastHLine(0, 28, 320, SM_BORDER);
 
     int start = max(0, min(sel - VISIBLE / 2, GAME_COUNT - VISIBLE));
 
@@ -666,34 +663,40 @@ static void drawGameMenu(int sel) {
         int idx      = start + i;
         int y        = 32 + i * 36;
         bool selected = (idx == sel);
-        uint16_t rowBg = selected ? SP_HDR_BG : TFT_BLACK;
+        uint16_t rowBg = selected ? SM_SEL : SM_BG;
         M5.Lcd.fillRect(2, y, 316, 32, rowBg);
         if (selected) {
-            M5.Lcd.fillRect(2, y, 3, 32, SP_NEON_M);
+            M5.Lcd.fillRect(2, y, 2, 32, SM_WHITE);
         }
         M5.Lcd.setTextSize(2);
-        M5.Lcd.setTextColor(selected ? SP_NEON_Y : (uint16_t)0x7BEF, rowBg);
+        M5.Lcd.setTextColor(selected ? SM_WHITE : SM_GREY, rowBg);
         M5.Lcd.setCursor(12, y + 7);
         M5.Lcd.printf("%2d. %s", idx + 1, GAMES[idx].name);
     }
 
-    spCornerFrame(0, 0, 320, 240, SP_NEON_C);
-    M5.Lcd.drawFastHLine(0, 214, 320, SP_NEON_M);
+    // Footer strip
+    M5.Lcd.fillRect(0, 212, 320, 28, SM_HDR);
+    M5.Lcd.drawFastHLine(0, 212, 320, SM_BORDER);
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setTextColor(SP_NEON_G, TFT_BLACK); M5.Lcd.setCursor(10,  222); M5.Lcd.print("[A:MOVE]");
-    M5.Lcd.setTextColor(SP_NEON_Y, TFT_BLACK); M5.Lcd.setCursor(115, 222); M5.Lcd.print("[B:PLAY]");
-    M5.Lcd.setTextColor(SP_NEON_M, TFT_BLACK); M5.Lcd.setCursor(225, 222); M5.Lcd.print("[C:BACK]");
+    M5.Lcd.setTextColor(SM_LIGHT, SM_HDR); M5.Lcd.setCursor(10,  220); M5.Lcd.print("[A] Move");
+    M5.Lcd.setTextColor(SM_WHITE, SM_HDR); M5.Lcd.setCursor(115, 220); M5.Lcd.print("[B] Play");
+    M5.Lcd.setTextColor(SM_GREY,  SM_HDR); M5.Lcd.setCursor(225, 220); M5.Lcd.print("[C] Back");
 }
 
 uint16_t runGameMenu() {
     int sel = 0;
-    drawGameMenu(sel);
+
+    // Background drawn once on entry; navigation only redraws content.
+    spDrawBackground();
+    spDrawStarfield(0, 0, 320, 240);
+    spCornerFrame(0, 0, 320, 240);
+    drawGameMenuContent(sel);
 
     while (true) {
         M5.update();
         if (M5.BtnA.wasPressed()) {
             sel = (sel + 1) % GAME_COUNT;
-            drawGameMenu(sel);
+            drawGameMenuContent(sel);
         }
         if (M5.BtnB.wasPressed()) {
             uint16_t earned = GAMES[sel].fn();

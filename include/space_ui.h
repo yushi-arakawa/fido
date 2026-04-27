@@ -1,52 +1,61 @@
 #pragma once
 #include <M5Stack.h>
 
-// ── Space theme palette (RGB565) ───────────────────────────────────────────
-#define SP_NEON_C   ((uint16_t)0x07FF)  // cyan
-#define SP_NEON_M   ((uint16_t)0xF81F)  // magenta
-#define SP_NEON_G   ((uint16_t)0x07E0)  // green
-#define SP_NEON_Y   ((uint16_t)0xFFE0)  // gold
-#define SP_NEON_R   ((uint16_t)0xF800)  // red
-#define SP_HDR_BG   ((uint16_t)0x000C)  // deep navy
-#define SP_GRID     ((uint16_t)0x2104)  // dim purple grid
-#define SP_MSG_BG   ((uint16_t)0x0802)  // dark nebula
-#define SP_DIM_C    ((uint16_t)0x0294)  // dim cyan text
-#define SP_STAR_DIM ((uint16_t)0x4208)  // dim star
-#define SP_STAR_BRT ((uint16_t)0xCE59)  // bright star
+// ── Monochrome space palette (pure greyscale) ──────────────────────────────
+#define SM_BG       ((uint16_t)0x0000)  // black
+#define SM_HDR      ((uint16_t)0x0841)  // ~3% grey  (header strip)
+#define SM_SEL      ((uint16_t)0x2945)  // ~16% grey (selection highlight)
+#define SM_DIV      ((uint16_t)0x2104)  // ~12% grey (divider lines)
+#define SM_DIM      ((uint16_t)0x4208)  // ~25% grey (dim / empty bar)
+#define SM_GREY     ((uint16_t)0x7BEF)  // ~50% grey (body text)
+#define SM_LIGHT    ((uint16_t)0xBDF7)  // ~75% grey (normal text)
+#define SM_WHITE    ((uint16_t)0xFFFF)  // white      (titles / emphasis)
+#define SM_BORDER   ((uint16_t)0x4208)  // border colour
 
-// ── Starfield (deterministic via coordinate hash) ─────────────────────────
+// ── Sky gradient background (top=black → bottom=dark navy) ────────────────
+// Call once when opening a full-screen view; do NOT call on every redraw.
+inline void spDrawBackground() {
+    M5.Lcd.fillRect(0,   0, 320,  80, 0x0000);
+    M5.Lcd.fillRect(0,  80, 320,  50, 0x0021);
+    M5.Lcd.fillRect(0, 130, 320,  50, 0x0062);
+    M5.Lcd.fillRect(0, 180, 320,  30, 0x0884);
+    M5.Lcd.fillRect(0, 210, 320,  30, 0x08C5);
+}
+
+// ── Starfield (low density, monochrome, deterministic) ────────────────────
+// Only call once on a static screen; individual drawPixel is slow/noisy.
 inline void spDrawStarfield(int x, int y, int w, int h) {
     for (int px = x; px < x + w; px++) {
         for (int py = y; py < y + h; py++) {
             uint32_t v = ((uint32_t)px * 2654435761u) ^ ((uint32_t)py * 2246822519u);
-            if ((v & 0xFF) < 8) {
-                uint16_t c = ((v >> 8) & 0xFF) < 120 ? SP_STAR_DIM : SP_STAR_BRT;
+            if ((v & 0x1FF) < 3) {          // ~0.6% density → ~460 stars full-screen
+                uint8_t br = (v >> 9) & 0xFF;
+                uint16_t c = br < 80  ? SM_DIM   :
+                             br < 160 ? SM_GREY  :
+                             br < 230 ? SM_LIGHT : SM_WHITE;
                 M5.Lcd.drawPixel(px, py, c);
             }
         }
     }
 }
 
-// ── Corner-accent border ──────────────────────────────────────────────────
-inline void spCornerFrame(int x, int y, int w, int h, uint16_t col) {
-    const int S = 8;
-    M5.Lcd.drawRect(x, y, w, h, SP_GRID);
+// ── Corner-accent frame ───────────────────────────────────────────────────
+inline void spCornerFrame(int x, int y, int w, int h, uint16_t col = SM_BORDER) {
+    const int S = 6;
+    M5.Lcd.drawRect(x, y, w, h, SM_DIV);
     M5.Lcd.drawFastHLine(x,     y,     S, col); M5.Lcd.drawFastVLine(x,     y,     S, col);
     M5.Lcd.drawFastHLine(x+w-S, y,     S, col); M5.Lcd.drawFastVLine(x+w-1, y,     S, col);
     M5.Lcd.drawFastHLine(x,     y+h-1, S, col); M5.Lcd.drawFastVLine(x,     y+h-S, S, col);
     M5.Lcd.drawFastHLine(x+w-S, y+h-1, S, col); M5.Lcd.drawFastVLine(x+w-1, y+h-S, S, col);
 }
 
-// ── Neon energy bar ───────────────────────────────────────────────────────
-inline void spNeonBar(int x, int y, int bw, int bh, uint8_t val, uint16_t col) {
+// ── Monochrome bar ────────────────────────────────────────────────────────
+inline void spBar(int x, int y, int bw, int bh, uint8_t val) {
     int filled = map(val, 0, 100, 0, bw);
-    M5.Lcd.fillRect(x, y, bw, bh, SP_GRID);
+    M5.Lcd.fillRect(x, y, bw, bh, SM_DIV);
     if (filled > 0) {
-        M5.Lcd.fillRect(x, y, filled, bh, col);
-        M5.Lcd.drawFastVLine(x + filled - 1, y, bh, TFT_WHITE); // glow tip
+        M5.Lcd.fillRect(x, y, filled, bh, SM_WHITE);
+        if (filled > 1)
+            M5.Lcd.drawFastVLine(x + filled - 1, y, bh, SM_LIGHT); // soft edge
     }
-}
-
-inline uint16_t spStatColor(uint8_t val) {
-    return val > 66 ? SP_NEON_C : val > 33 ? SP_NEON_Y : SP_NEON_R;
 }
