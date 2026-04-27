@@ -1,17 +1,23 @@
 #include "minigame.h"
+#include "space_ui.h"
 #include <M5Stack.h>
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
 static void msgScreen(const char* line1, const char* line2 = nullptr, uint32_t wait = 2000) {
     M5.Lcd.fillScreen(TFT_BLACK);
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    spDrawStarfield(0, 0, 320, 240);
+    // Title banner
+    M5.Lcd.fillRect(0, 72, 320, 46, SP_HDR_BG);
+    spCornerFrame(0, 72, 320, 46, SP_NEON_C);
+    M5.Lcd.setTextColor(SP_NEON_Y, SP_HDR_BG);
     M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(20, 90);
+    M5.Lcd.setCursor(20, 82);
     M5.Lcd.print(line1);
     if (line2) {
+        M5.Lcd.setTextColor(SP_DIM_C, TFT_BLACK);
         M5.Lcd.setTextSize(1);
-        M5.Lcd.setCursor(20, 120);
+        M5.Lcd.setCursor(20, 132);
         M5.Lcd.print(line2);
     }
     delay(wait);
@@ -19,10 +25,16 @@ static void msgScreen(const char* line1, const char* line2 = nullptr, uint32_t w
 
 static void showResult(uint16_t earned) {
     M5.Lcd.fillScreen(TFT_BLACK);
-    M5.Lcd.setTextColor(TFT_YELLOW, TFT_BLACK);
+    spDrawStarfield(0, 0, 320, 240);
+    M5.Lcd.setTextColor(SP_NEON_M, TFT_BLACK);
     M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(60, 95);
-    M5.Lcd.printf("Total: +%d coins!", earned);
+    M5.Lcd.setCursor(50, 80);
+    M5.Lcd.print("MISSION COMPLETE");
+    M5.Lcd.setTextColor(SP_NEON_Y, TFT_BLACK);
+    M5.Lcd.setTextSize(3);
+    M5.Lcd.setCursor(50, 110);
+    M5.Lcd.printf("+%d coins!", earned);
+    spCornerFrame(0, 0, 320, 240, SP_NEON_M);
     delay(2000);
 }
 
@@ -634,36 +646,43 @@ static const GameEntry GAMES[] = {
     {"Lucky Roll", gameLuckyRoll },
 };
 static const int GAME_COUNT = (int)(sizeof(GAMES) / sizeof(GAMES[0]));
-static const uint16_t MENU_BORDER = 0x05BF;
 static const int VISIBLE = 5;
 
 static void drawGameMenu(int sel) {
     M5.Lcd.fillScreen(TFT_BLACK);
-    M5.Lcd.setTextColor(TFT_YELLOW, TFT_BLACK);
+    spDrawStarfield(0, 0, 320, 240);
+
+    // Header
+    M5.Lcd.fillRect(0, 0, 320, 28, SP_HDR_BG);
+    M5.Lcd.setTextColor(SP_NEON_Y, SP_HDR_BG);
     M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(80, 6);
+    M5.Lcd.setCursor(60, 6);
     M5.Lcd.print("MINI GAMES");
-    M5.Lcd.drawFastHLine(0, 28, 320, MENU_BORDER);
+    M5.Lcd.drawFastHLine(0, 28, 320, SP_NEON_C);
 
     int start = max(0, min(sel - VISIBLE / 2, GAME_COUNT - VISIBLE));
 
     for (int i = 0; i < VISIBLE && (start + i) < GAME_COUNT; i++) {
         int idx      = start + i;
-        int y        = 34 + i * 36;
+        int y        = 32 + i * 36;
         bool selected = (idx == sel);
-        M5.Lcd.fillRect(2, y, 316, 32, selected ? TFT_DARKGREY : TFT_BLACK);
+        uint16_t rowBg = selected ? SP_HDR_BG : TFT_BLACK;
+        M5.Lcd.fillRect(2, y, 316, 32, rowBg);
+        if (selected) {
+            M5.Lcd.fillRect(2, y, 3, 32, SP_NEON_M);
+        }
         M5.Lcd.setTextSize(2);
-        M5.Lcd.setTextColor(selected ? TFT_YELLOW : TFT_WHITE, selected ? TFT_DARKGREY : TFT_BLACK);
+        M5.Lcd.setTextColor(selected ? SP_NEON_Y : (uint16_t)0x7BEF, rowBg);
         M5.Lcd.setCursor(12, y + 7);
         M5.Lcd.printf("%2d. %s", idx + 1, GAMES[idx].name);
     }
 
-    M5.Lcd.drawFastHLine(0, 214, 320, MENU_BORDER);
+    spCornerFrame(0, 0, 320, 240, SP_NEON_C);
+    M5.Lcd.drawFastHLine(0, 214, 320, SP_NEON_M);
     M5.Lcd.setTextSize(1);
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.setCursor(10,  222); M5.Lcd.print("[Move]");
-    M5.Lcd.setCursor(130, 222); M5.Lcd.print("[Play]");
-    M5.Lcd.setCursor(244, 222); M5.Lcd.print("[Back]");
+    M5.Lcd.setTextColor(SP_NEON_G, TFT_BLACK); M5.Lcd.setCursor(10,  222); M5.Lcd.print("[A:MOVE]");
+    M5.Lcd.setTextColor(SP_NEON_Y, TFT_BLACK); M5.Lcd.setCursor(115, 222); M5.Lcd.print("[B:PLAY]");
+    M5.Lcd.setTextColor(SP_NEON_M, TFT_BLACK); M5.Lcd.setCursor(225, 222); M5.Lcd.print("[C:BACK]");
 }
 
 uint16_t runGameMenu() {
