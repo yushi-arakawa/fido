@@ -1,8 +1,8 @@
 #pragma once
+#include <Arduino.h>
 
-// Draws the planet sprite with bob + sparkle animation.
-// Call once per frame from the main loop.
-void charAnimUpdate();
+// age: pet.age (increments every 30s). Used to select the growth stage sprite.
+void charAnimUpdate(uint8_t age);
 
 // Force a full redraw of the character area (call after screen clear).
 void charAnimRedraw();

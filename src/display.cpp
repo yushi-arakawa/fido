@@ -12,6 +12,14 @@ static const int BAR_W     = PANEL_DIV - STAT_X * 2 - 3; // 152
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+static const char* stageName(uint8_t age) {
+    if (age < 20) return "Egg";
+    if (age < 40) return "Child";
+    if (age < 60) return "Teen";
+    if (age < 80) return "Young";
+    return "Elder";
+}
+
 static const char* moodLabel(PetMood m) {
     switch (m) {
         case PetMood::Happy:   return "Happy  :D";
@@ -32,13 +40,13 @@ static void drawStatusPanel(const Pet& pet, const Inventory& inv) {
     M5.Lcd.setCursor(STAT_X, 4);
     M5.Lcd.print(pet.name);
 
-    // Day + coins
+    // Day + stage + coins
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(SM_GREY, SM_BG);
     M5.Lcd.setCursor(STAT_X, 27);
-    M5.Lcd.printf("Day%-2d", pet.age);
+    M5.Lcd.printf("Day%-3d[%s]", pet.age, stageName(pet.age));
     M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
-    M5.Lcd.setCursor(STAT_X + 42, 27);
+    M5.Lcd.setCursor(STAT_X + 108, 27);
     M5.Lcd.printf("$%d", inv.coins);
 
     M5.Lcd.drawFastHLine(1, 37, PANEL_DIV - 2, SM_DIV);

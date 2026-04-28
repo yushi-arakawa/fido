@@ -9,7 +9,7 @@ PetMood Pet::calcMood() const {
 }
 
 void Pet::tick() {
-    // decay over time
+    if (age < 255) age++;       // 1 tick = 30s → stage changes every 20 ticks (~10 min)
     if (hunger    > 0)  hunger    -= 2;
     if (happiness > 0)  happiness -= 1;
     if (hunger < 20)    health    = max(0, (int)health - 1);

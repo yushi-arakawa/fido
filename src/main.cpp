@@ -28,7 +28,7 @@ static void refresh() {
 static void returnFromFullscreen(const String& msg) {
     M5.Lcd.fillScreen(BLACK);
     refresh();
-    charAnimUpdate(); // draw character immediately without waiting for next loop tick
+    charAnimUpdate(pet.age); // draw character immediately without waiting for next loop tick
     displayMessage(msg);
 }
 
@@ -144,6 +144,6 @@ void loop() {
         refresh();
     }
 
-    charAnimUpdate();
+    charAnimUpdate(pet.age);
     delay(16);
 }
