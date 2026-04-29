@@ -83,6 +83,7 @@ void loop() {
 
     // ── C: cycle Main → Act → Back → Main ──────────────────────────────
     if (M5.BtnC.wasPressed()) {
+        M5.Speaker.tone(392, 60); // G4
         if      (uiMode == UIMode::Main) uiMode = UIMode::Act;
         else if (uiMode == UIMode::Act)  uiMode = UIMode::Back;
         else                             uiMode = UIMode::Main;
@@ -95,6 +96,7 @@ void loop() {
 
         // B: Talk
         if (M5.BtnB.wasPressed()) {
+            M5.Speaker.tone(330, 60); // E4
             displayMessage("...");
             displayMessage(askClaude(pet, "How are you feeling?"));
         }
@@ -103,11 +105,13 @@ void loop() {
     // ── Act mode ────────────────────────────────────────────────────────
     if (uiMode == UIMode::Act) {
         if (M5.BtnA.wasPressed()) {
+            M5.Speaker.tone(262, 60); // C4
             actSel = (actSel + 1) % 4;
             displayActContent(actSel);
             displayMenuBar(uiMode, actSel);
         }
         if (M5.BtnB.wasPressed()) {
+            M5.Speaker.tone(330, 60); // E4
             doAct(actSel);
         }
     }
@@ -116,6 +120,7 @@ void loop() {
     if (uiMode == UIMode::Back) {
         // A: Config / Settings
         if (M5.BtnA.wasPressed()) {
+            M5.Speaker.tone(262, 60); // C4
             showSettings(pet, inv);
             fullRedraw();
         }

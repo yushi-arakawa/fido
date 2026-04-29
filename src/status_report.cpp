@@ -44,8 +44,8 @@ bool showConfirmDialog(const char* line1, const char* line2, const char* confirm
 
     while (true) {
         M5.update();
-        if (M5.BtnA.wasPressed()) return true;
-        if (M5.BtnC.wasPressed()) return false;
+        if (M5.BtnA.wasPressed()) { M5.Speaker.tone(330, 80); return true; }
+        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(262, 60); return false; }
         delay(20);
     }
 }
@@ -110,15 +110,17 @@ void showSettings(Pet& pet, Inventory& inv) {
         M5.update();
 
         if (M5.BtnA.wasPressed()) {
+            M5.Speaker.tone(262, 60); // C4
             sel = (sel + 1) % 3;
             drawSettings(sel, vol);
         }
 
         if (M5.BtnB.wasPressed()) {
             if (sel == 0) {
-                // Adjust volume
+                // Adjust volume — play test tone at new level so user can hear it
                 vol = (vol + 1) % 9; // 0-8
                 saveVolume(vol);
+                M5.Speaker.tone(440, 150); // A4 preview
                 drawSettings(sel, vol);
             } else if (sel == 1) {
                 // Power off
@@ -146,7 +148,7 @@ void showSettings(Pet& pet, Inventory& inv) {
             }
         }
 
-        if (M5.BtnC.wasPressed()) break;
+        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(392, 60); break; } // G4
 
         delay(20);
     }
