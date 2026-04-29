@@ -8,9 +8,9 @@
 static uint8_t loadVolume() {
     Preferences p;
     p.begin("fido", true);
-    uint8_t v = p.getUChar("vol", 2);
+    uint8_t v = p.getUChar("vol", 1); // default: ON
     p.end();
-    return v;
+    return v ? 1 : 0;
 }
 
 static void saveVolume(uint8_t v) {
@@ -18,9 +18,7 @@ static void saveVolume(uint8_t v) {
     p.begin("fido", false);
     p.putUChar("vol", v);
     p.end();
-    // ~3dB per step, max=15 (perceptually even spacing)
-    static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
-    M5.Speaker.setVolume(VOL_MAP[v]);
+    M5.Speaker.setVolume(v ? 1 : 0);
 }
 
 // ── Confirm dialog ────────────────────────────────────────────────────────
@@ -46,8 +44,8 @@ bool showConfirmDialog(const char* line1, const char* line2, const char* confirm
 
     while (true) {
         M5.update();
-        if (M5.BtnA.wasPressed()) { M5.Speaker.tone(330, 80); return true; }
-        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(262, 60); return false; }
+        if (M5.BtnA.wasPressed()) { M5.Speaker.tone(165, 80); return true; }
+        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(131, 60); return false; }
         delay(20);
     }
 }
@@ -81,11 +79,9 @@ static void drawSettings(int sel, uint8_t vol) {
         M5.Lcd.printf("%s %s", active ? ">" : " ", items[i].label);
 
         if (i == 0) {
-            // Volume bar
             M5.Lcd.setTextColor(SM_DIM, bg);
             M5.Lcd.setCursor(12, y + 20);
-            for (int b = 0; b < 8; b++) M5.Lcd.print(b < vol ? "#" : "-");
-            M5.Lcd.printf("  %d/8", vol);
+            M5.Lcd.print(vol ? "ON " : "OFF");
         }
     }
 
@@ -112,17 +108,16 @@ void showSettings(Pet& pet, Inventory& inv) {
         M5.update();
 
         if (M5.BtnA.wasPressed()) {
-            M5.Speaker.tone(262, 60); // C4
+            M5.Speaker.tone(131, 60); // C3
             sel = (sel + 1) % 3;
             drawSettings(sel, vol);
         }
 
         if (M5.BtnB.wasPressed()) {
             if (sel == 0) {
-                // Adjust volume — play test tone at new level so user can hear it
-                vol = (vol + 1) % 9; // 0-8
+                vol = 1 - vol; // toggle ON/OFF
                 saveVolume(vol);
-                M5.Speaker.tone(440, 150); // A4 preview
+                if (vol) M5.Speaker.tone(220, 150); // A3 preview when turning on
                 drawSettings(sel, vol);
             } else if (sel == 1) {
                 // Power off
@@ -151,7 +146,7 @@ void showSettings(Pet& pet, Inventory& inv) {
             }
         }
 
-        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(392, 60); break; } // G4
+        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(196, 60); break; } // G3
 
         delay(20);
     }

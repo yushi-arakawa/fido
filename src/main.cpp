@@ -69,11 +69,9 @@ void setup() {
     {
         Preferences p;
         p.begin("fido", true);
-        uint8_t vol = p.getUChar("vol", 2);
+        uint8_t vol = p.getUChar("vol", 1); // default: ON
         p.end();
-        // ~3dB per step, max=15 (perceptually even spacing)
-        static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
-        M5.Speaker.setVolume(VOL_MAP[vol]);
+        M5.Speaker.setVolume(vol ? 1 : 0);
     }
     fullRedraw("Hello! I'm " + pet.name + "!");
 }
@@ -85,7 +83,7 @@ void loop() {
 
     // ── C: cycle Main → Act → Back → Main ──────────────────────────────
     if (M5.BtnC.wasPressed()) {
-        M5.Speaker.tone(392, 60); // G4
+        M5.Speaker.tone(196, 60); // G3
         if      (uiMode == UIMode::Main) uiMode = UIMode::Act;
         else if (uiMode == UIMode::Act)  uiMode = UIMode::Back;
         else                             uiMode = UIMode::Main;
@@ -101,7 +99,7 @@ void loop() {
             if (pet.age < 4) {
                 displayMessage("...(still an egg)");
             } else {
-                M5.Speaker.tone(330, 60); // E4
+                M5.Speaker.tone(165, 60); // E3
                 displayMessage("...");
                 displayMessage(askClaude(pet, "How are you feeling?"));
             }
@@ -111,13 +109,13 @@ void loop() {
     // ── Act mode ────────────────────────────────────────────────────────
     if (uiMode == UIMode::Act) {
         if (M5.BtnA.wasPressed()) {
-            M5.Speaker.tone(262, 60); // C4
+            M5.Speaker.tone(131, 60); // C3
             actSel = (actSel + 1) % 4;
             displayActContent(actSel);
             displayMenuBar(uiMode, actSel);
         }
         if (M5.BtnB.wasPressed()) {
-            M5.Speaker.tone(330, 60); // E4
+            M5.Speaker.tone(165, 60); // E3
             doAct(actSel);
         }
     }
@@ -126,7 +124,7 @@ void loop() {
     if (uiMode == UIMode::Back) {
         // A: Config / Settings
         if (M5.BtnA.wasPressed()) {
-            M5.Speaker.tone(262, 60); // C4
+            M5.Speaker.tone(131, 60); // C3
             showSettings(pet, inv);
             fullRedraw();
         }

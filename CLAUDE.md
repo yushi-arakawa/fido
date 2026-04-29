@@ -21,7 +21,7 @@ Main → Act → Back → Main ...
 | **Main** | 宇宙背景 + キャラクター(128×128) + メッセージBOX | --- | Talk (Claude API, Egg期は無効) | → Act |
 | **Act** | 左: アクションリスト / 右: Fido生態tips | Move | OK | → Back |
 | **Back** | ステータス全表示（ステータス + カード統合） | Config | --- | → Main |
-| **Config** | 音量(0-8) / 電源OFF / データ削除 | Move | Select | Close |
+| **Config** | 音量(ON/OFF) / 電源OFF / データ削除 | Move | Select | Close |
 
 ---
 
@@ -151,22 +151,21 @@ Vitamin / Potion / Steak / Toy Car / P.Hat / Elixir / Star
 
 | ボタン | 周波数 | 長さ | 用途 |
 |--------|--------|------|------|
-| A | C4 262 Hz | 60 ms | Move / Config |
-| B | E4 330 Hz | 60 ms | OK / Talk / 確認 |
-| C | G4 392 Hz | 60 ms | 画面切り替え / Close |
-| 音量調整 (B on vol) | A4 440 Hz | 150 ms | 新音量のプレビュー |
+| A | C3 131 Hz | 60 ms | Move / Config |
+| B | E3 165 Hz | 60 ms | OK / Talk / 確認 |
+| C | G3 196 Hz | 60 ms | 画面切り替え / Close |
+| 音量ON時 (B on vol) | A3 220 Hz | 150 ms | ON時のプレビュー |
 
-### 音量スケール
+### 音量設定
 
-Config の 0〜8 設定は対数テーブルで実際の `setVolume()` 値に変換する。
-人間の聴覚は対数特性のため、線形スケールでは高設定での差が知覚しにくい。
+Config の音量設定は **ON / OFF の二択**。NVS キー `"vol"` に 0 or 1 を保存。
 
 ```cpp
-static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
-// 各ステップ約 3 dB, 最大値 6/255, デフォルト設定値 2
+M5.Speaker.setVolume(vol ? 1 : 0);
+// ON=1, OFF=0, デフォルト ON (1)
 ```
 
-同じテーブルを `main.cpp` (起動時) と `status_report.cpp` (saveVolume) の両方で使う。
+`main.cpp` (起動時) と `status_report.cpp` (saveVolume) の両方で同じロジックを使う。
 データ削除・再起動前は `M5.Speaker.end()` でスピーカーを停止してからリセットする。
 
 ---
