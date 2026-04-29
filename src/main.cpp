@@ -71,7 +71,9 @@ void setup() {
         p.begin("fido", true);
         uint8_t vol = p.getUChar("vol", 4);
         p.end();
-        M5.Speaker.setVolume(vol * 5);
+        // ~3dB per step, max=15 (perceptually even spacing)
+        static const uint8_t VOL_MAP[9] = {0, 1, 2, 3, 4, 6, 8, 11, 15};
+        M5.Speaker.setVolume(VOL_MAP[vol]);
     }
     fullRedraw("Hello! I'm " + pet.name + "!");
 }

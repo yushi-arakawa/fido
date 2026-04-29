@@ -18,7 +18,9 @@ static void saveVolume(uint8_t v) {
     p.begin("fido", false);
     p.putUChar("vol", v);
     p.end();
-    M5.Speaker.setVolume(v * 5); // 0-8 → 0-40
+    // ~3dB per step, max=15 (perceptually even spacing)
+    static const uint8_t VOL_MAP[9] = {0, 1, 2, 3, 4, 6, 8, 11, 15};
+    M5.Speaker.setVolume(VOL_MAP[v]);
 }
 
 // ── Confirm dialog ────────────────────────────────────────────────────────
