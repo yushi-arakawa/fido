@@ -72,7 +72,7 @@ void setup() {
         uint8_t vol = p.getUChar("vol", 2);
         p.end();
         // ~3dB per step, max=15 (perceptually even spacing)
-        static const uint8_t VOL_MAP[9] = {0, 1, 1, 2, 3, 4, 6, 8, 11};
+        static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
         M5.Speaker.setVolume(VOL_MAP[vol]);
     }
     fullRedraw("Hello! I'm " + pet.name + "!");
