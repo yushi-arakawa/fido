@@ -66,7 +66,6 @@ void setup() {
     M5.begin();
     loadAll(pet, inv);
     lastTick = millis();
-    // Apply saved volume
     {
         Preferences p;
         p.begin("fido", true);

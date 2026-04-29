@@ -2,22 +2,16 @@
 #include "sprite_stages.h"
 #include "space_ui.h"
 #include <M5Stack.h>
-#include <SD.h>
 #include <math.h>
 
 static const float BOB_AMP  = 3.0f;
 static const float BOB_FREQ = 0.0015f;
+static const int   SCALE    = 2;          // 64x64 -> 128x128 at draw time
+static const int   DW       = SPRITE_W * SCALE;
+static const int   DH       = SPRITE_H * SCALE;
 
-static const char* STAGE_FILES[5] = {
-    "/char/egg.bin",
-    "/char/child.bin",
-    "/char/teen.bin",
-    "/char/young.bin",
-    "/char/elder.bin",
-};
-
-// 128×128×2 = 32 KB — loaded from SD on stage change
-static uint16_t buf[SPRITE_W * SPRITE_H];
+static uint16_t buf[SPRITE_W * SPRITE_H]; // 64x64 source in DRAM
+static uint16_t scaledBuf[DW * DH];       // 128x128 scaled in DRAM
 static int      currentStage = -1;
 static int      lastBobY     = -999;
 static int      lastCX       = -1;
@@ -32,24 +26,28 @@ static int stageForAge(uint8_t age) {
 }
 
 static void loadStage(int stage) {
-    File f = SD.open(STAGE_FILES[stage]);
-    if (f) {
-        f.read((uint8_t*)buf, SPRITE_W * SPRITE_H * sizeof(uint16_t));
-        f.close();
-    } else {
-        memset(buf, 0, sizeof(buf)); // blank sprite if SD missing
+    memcpy(buf, SPRITES[stage], SPRITE_W * SPRITE_H * sizeof(uint16_t));
+    // Pre-scale 64x64 -> 128x128 (nearest-neighbour, done once per stage change)
+    for (int y = 0; y < SPRITE_H; y++) {
+        for (int x = 0; x < SPRITE_W; x++) {
+            uint16_t px = buf[y * SPRITE_W + x];
+            int dx = x * SCALE, dy = y * SCALE;
+            scaledBuf[ dy      * DW + dx    ] = px;
+            scaledBuf[ dy      * DW + dx + 1] = px;
+            scaledBuf[(dy + 1) * DW + dx    ] = px;
+            scaledBuf[(dy + 1) * DW + dx + 1] = px;
+        }
     }
     currentStage = stage;
 }
 
 static void drawChar(int cx, int cy, int bobY) {
-    M5.Lcd.pushImage(cx - SPRITE_W / 2, cy - SPRITE_H / 2 + bobY,
-                     SPRITE_W, SPRITE_H, buf, (uint16_t)0x0000);
+    M5.Lcd.pushImage(cx - DW / 2, cy - DH / 2 + bobY,
+                     DW, DH, scaledBuf, (uint16_t)0x0000);
 }
 
 static void eraseChar(int cx, int cy, int bobY) {
-    spDrawBackgroundRect(cx - SPRITE_W / 2, cy - SPRITE_H / 2 + bobY,
-                         SPRITE_W, SPRITE_H);
+    spDrawBackgroundRect(cx - DW / 2, cy - DH / 2 + bobY, DW, DH);
 }
 
 void charAnimRedraw() { lastBobY = -999; }
