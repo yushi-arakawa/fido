@@ -9,130 +9,128 @@
 #include "status_report.h"
 #include <Preferences.h>
 
+// Character center on Main screen (full-width, message box at y=155)
+static const int CHAR_CX = 160;
+static const int CHAR_CY = 80;
+
 static Pet       pet       = {"Fido", 80, 80, 100, 0, PetMood::Happy};
 static Inventory inv       = {0, 0, {false, false, false, false}};
-static UIMode    uiMode    = UIMode::Status;
-static int       actionIdx = 0;
+static UIMode    uiMode    = UIMode::Main;
+static int       actSel    = 0;
 
-static unsigned long lastTick  = 0;
-static unsigned long aPressTime = 0; // for long-press detection
-static const unsigned long TICK_MS     = 30000;
-static const unsigned long LONGPRESS_MS = 2000;
+static unsigned long lastTick = 0;
+static const unsigned long TICK_MS = 30000;
 
-static void refresh() {
-    displayLeftPanel(pet, uiMode, actionIdx, inv);
-    displayMenu(uiMode, actionIdx);
+// Redraw the current mode from scratch (background + content).
+// Called on mode switch and after returning from a fullscreen sub-screen.
+static void fullRedraw(const String& msg = "") {
+    charAnimRedraw();
+    displayInit(uiMode, pet, inv, actSel);
+    if (msg.length() > 0) displayMessage(msg);
 }
 
-// Full redraw after a fullscreen mode (mini-game / shop).
-static void returnFromFullscreen(const String& msg) {
-    M5.Lcd.fillScreen(BLACK);
-    refresh();
-    charAnimUpdate(); // draw character immediately without waiting for next loop tick
-    displayMessage(msg);
-}
+// ── Action execution (Act mode) ───────────────────────────────────────────
 
-static void doAction(int idx) {
+static void doAct(int idx) {
     switch (idx) {
         case 0: // Feed
             pet.hunger    = min(100, (int)pet.hunger    + 30);
             pet.happiness = min(100, (int)pet.happiness + 5);
             pet.mood      = pet.calcMood();
-            refresh();
             displayMessage("Yum! Nom nom nom...");
             break;
         case 1: // Play
             pet.happiness = min(100, (int)pet.happiness + 20);
             pet.hunger    = max(0,   (int)pet.hunger    - 10);
             pet.mood      = pet.calcMood();
-            refresh();
             displayMessage("Wheee! So fun!");
             break;
-        case 2: // Talk
-            displayMessage("...");
-            displayMessage(askClaude(pet, "How are you feeling?"));
-            break;
-        case 3: { // Game
+        case 2: { // Game
             uint16_t earned = runGameMenu();
             inv.coins += earned;
             saveAll(pet, inv);
-            returnFromFullscreen("Game over! +" + String(earned) + " coins");
+            fullRedraw("Game over! +" + String(earned) + " coins");
             break;
         }
-        case 4: // Shop
+        case 3: // Shop
             runShop(pet, inv);
-            returnFromFullscreen("Thanks for shopping!");
+            saveAll(pet, inv);
+            fullRedraw("Thanks for shopping!");
             break;
     }
-    displayMenu(uiMode, actionIdx);
 }
+
+// ── Setup ─────────────────────────────────────────────────────────────────
 
 void setup() {
     M5.begin();
-    M5.Lcd.setTextColor(WHITE, BLACK);
-    M5.Lcd.fillScreen(BLACK);
     loadAll(pet, inv);
     lastTick = millis();
-    refresh();
-    displayMessage("Hello! I'm " + pet.name + "!");
+    {
+        Preferences p;
+        p.begin("fido", true);
+        uint8_t vol = p.getUChar("vol", 2);
+        p.end();
+        // ~3dB per step, max=15 (perceptually even spacing)
+        static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
+        M5.Speaker.setVolume(VOL_MAP[vol]);
+    }
+    fullRedraw("Hello! I'm " + pet.name + "!");
 }
+
+// ── Main loop ─────────────────────────────────────────────────────────────
 
 void loop() {
     M5.update();
 
-    // ── Right button: toggle Status / Action ────────────────────────────
+    // ── C: cycle Main → Act → Back → Main ──────────────────────────────
     if (M5.BtnC.wasPressed()) {
-        uiMode = (uiMode == UIMode::Status) ? UIMode::Action : UIMode::Status;
-        refresh();
+        M5.Speaker.tone(392, 60); // G4
+        if      (uiMode == UIMode::Main) uiMode = UIMode::Act;
+        else if (uiMode == UIMode::Act)  uiMode = UIMode::Back;
+        else                             uiMode = UIMode::Main;
+        fullRedraw();
     }
 
-    // ── Status mode buttons ─────────────────────────────────────────────
-    if (uiMode == UIMode::Status) {
-        // A: track press time for long-press
-        if (M5.BtnA.wasPressed()) {
-            aPressTime = millis();
-            displayMessage("Hold 2s to clear data  Release to power off");
-        }
-        if (M5.BtnA.wasReleased() && aPressTime > 0) {
-            unsigned long held = millis() - aPressTime;
-            aPressTime = 0;
-            if (held >= LONGPRESS_MS) {
-                // Long press: clear data + restart
-                if (showConfirmDialog("Clear all data and restart?",
-                                      "This cannot be undone.",
-                                      "[A] Confirm")) {
-                    Preferences p;
-                    p.begin("fido", false);
-                    p.clear();
-                    p.end();
-                    ESP.restart();
-                }
+    // ── Main mode ───────────────────────────────────────────────────────
+    if (uiMode == UIMode::Main) {
+        // A: reserved (do nothing)
+
+        // B: Talk (egg stage cannot talk)
+        if (M5.BtnB.wasPressed()) {
+            if (pet.age < 4) {
+                displayMessage("...(still an egg)");
             } else {
-                // Short press: power off
-                if (showConfirmDialog("Power off?", "",
-                                      "[A] Power Off")) {
-                    M5.Power.powerOFF();
-                }
+                M5.Speaker.tone(330, 60); // E4
+                displayMessage("...");
+                displayMessage(askClaude(pet, "How are you feeling?"));
             }
-            returnFromFullscreen("");
-        }
-
-        // B: show health card
-        if (M5.BtnB.wasPressed()) {
-            showStatusReport(pet, inv);
-            returnFromFullscreen("");
         }
     }
 
-    // ── Action mode buttons ─────────────────────────────────────────────
-    if (uiMode == UIMode::Action) {
+    // ── Act mode ────────────────────────────────────────────────────────
+    if (uiMode == UIMode::Act) {
         if (M5.BtnA.wasPressed()) {
-            actionIdx = (actionIdx + 1) % 5;
-            refresh();
+            M5.Speaker.tone(262, 60); // C4
+            actSel = (actSel + 1) % 4;
+            displayActContent(actSel);
+            displayMenuBar(uiMode, actSel);
         }
         if (M5.BtnB.wasPressed()) {
-            doAction(actionIdx);
+            M5.Speaker.tone(330, 60); // E4
+            doAct(actSel);
         }
+    }
+
+    // ── Back mode ───────────────────────────────────────────────────────
+    if (uiMode == UIMode::Back) {
+        // A: Config / Settings
+        if (M5.BtnA.wasPressed()) {
+            M5.Speaker.tone(262, 60); // C4
+            showSettings(pet, inv);
+            fullRedraw();
+        }
+        // B: reserved
     }
 
     // ── Game tick ───────────────────────────────────────────────────────
@@ -141,9 +139,17 @@ void loop() {
         pet.tick();
         if (inv.bond < 1000) inv.bond++;
         saveAll(pet, inv);
-        refresh();
+        // Refresh live data on Back screen; other modes need no stat update
+        if (uiMode == UIMode::Back) {
+            displayBackContent(pet, inv);
+            displayMenuBar(uiMode, actSel);
+        }
     }
 
-    charAnimUpdate();
+    // ── Character animation (Main mode only) ────────────────────────────
+    if (uiMode == UIMode::Main) {
+        charAnimUpdate(pet.age, CHAR_CX, CHAR_CY);
+    }
+
     delay(16);
 }

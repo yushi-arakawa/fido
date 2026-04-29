@@ -49,6 +49,18 @@ inline void spCornerFrame(int x, int y, int w, int h, uint16_t col = SM_BORDER) 
     M5.Lcd.drawFastHLine(x+w-S, y+h-1, S, col); M5.Lcd.drawFastVLine(x+w-1, y+h-S, S, col);
 }
 
+// ── Background restore for a sub-rect (used by char erase in Main mode) ──
+inline void spDrawBackgroundRect(int x, int y, int w, int h) {
+    for (int row = y; row < y + h; row++) {
+        uint16_t c = row <  80 ? (uint16_t)0x0000 :
+                     row < 130 ? (uint16_t)0x0021 :
+                     row < 180 ? (uint16_t)0x0062 :
+                     row < 210 ? (uint16_t)0x0884 : (uint16_t)0x08C5;
+        M5.Lcd.drawFastHLine(x, row, w, c);
+    }
+    spDrawStarfield(x, y, w, h);
+}
+
 // ── Monochrome bar ────────────────────────────────────────────────────────
 inline void spBar(int x, int y, int bw, int bh, uint8_t val) {
     int filled = map(val, 0, 100, 0, bw);

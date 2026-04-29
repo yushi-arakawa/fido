@@ -1,8 +1,9 @@
 #pragma once
+#include <Arduino.h>
 
-// Draws the planet sprite with bob + sparkle animation.
-// Call once per frame from the main loop.
-void charAnimUpdate();
+// Draw/animate the pet sprite at screen position (cx, cy).
+// Only call this in Main mode; not needed in Act/Back modes.
+void charAnimUpdate(uint8_t age, int cx, int cy);
 
-// Force a full redraw of the character area (call after screen clear).
+// Force full redraw on next charAnimUpdate call (call after screen clear).
 void charAnimRedraw();
