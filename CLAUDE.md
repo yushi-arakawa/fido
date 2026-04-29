@@ -18,7 +18,7 @@ Main → Act → Back → Main ...
 
 | 画面 | 内容 | A | B | C |
 |------|------|---|---|---|
-| **Main** | 宇宙背景 + キャラクター(128×128) + メッセージBOX | --- | Talk (Claude API) | → Act |
+| **Main** | 宇宙背景 + キャラクター(128×128) + メッセージBOX | --- | Talk (Claude API, Egg期は無効) | → Act |
 | **Act** | 左: アクションリスト / 右: Fido生態tips | Move | OK | → Back |
 | **Back** | ステータス全表示（ステータス + カード統合） | Config | --- | → Main |
 | **Config** | 音量(0-8) / 電源OFF / データ削除 | Move | Select | Close |
@@ -86,8 +86,8 @@ struct Inventory {
 ### 成長ステージ (ageで決定)
 | age | ステージ | 目安 |
 |-----|---------|------|
-| 0-19 | Egg | 0-9分 |
-| 20-39 | Child | 10-19分 |
+| 0-3 | Egg | 0-2分 |
+| 4-39 | Child | 2-19分 |
 | 40-59 | Teen | 20-29分 |
 | 60-79 | Young | 30-39分 |
 | 80+ | Elder | 40分~ |
@@ -162,11 +162,12 @@ Config の 0〜8 設定は対数テーブルで実際の `setVolume()` 値に変
 人間の聴覚は対数特性のため、線形スケールでは高設定での差が知覚しにくい。
 
 ```cpp
-static const uint8_t VOL_MAP[9] = {0, 1, 2, 3, 4, 6, 8, 11, 15};
-// 各ステップ約 3 dB, 最大値 15/255
+static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
+// 各ステップ約 3 dB, 最大値 6/255, デフォルト設定値 2
 ```
 
 同じテーブルを `main.cpp` (起動時) と `status_report.cpp` (saveVolume) の両方で使う。
+データ削除・再起動前は `M5.Speaker.end()` でスピーカーを停止してからリセットする。
 
 ---
 
