@@ -18,7 +18,7 @@ static void saveVolume(uint8_t v) {
     p.begin("fido", false);
     p.putUChar("vol", v);
     p.end();
-    M5.Speaker.setVolume(v * 12); // 0-8 → 0-96
+    M5.Speaker.setVolume(v * 5); // 0-8 → 0-40
 }
 
 // ── Confirm dialog ────────────────────────────────────────────────────────

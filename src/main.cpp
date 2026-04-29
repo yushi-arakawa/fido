@@ -71,7 +71,7 @@ void setup() {
         p.begin("fido", true);
         uint8_t vol = p.getUChar("vol", 4);
         p.end();
-        M5.Speaker.setVolume(vol * 12);
+        M5.Speaker.setVolume(vol * 5);
     }
     fullRedraw("Hello! I'm " + pet.name + "!");
 }
