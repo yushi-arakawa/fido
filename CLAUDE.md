@@ -145,6 +145,31 @@ Vitamin / Potion / Steak / Toy Car / P.Hat / Elixir / Star
 
 ---
 
+## サウンド (M5.Speaker)
+
+### ボタン効果音 (main.cpp / status_report.cpp)
+
+| ボタン | 周波数 | 長さ | 用途 |
+|--------|--------|------|------|
+| A | C4 262 Hz | 60 ms | Move / Config |
+| B | E4 330 Hz | 60 ms | OK / Talk / 確認 |
+| C | G4 392 Hz | 60 ms | 画面切り替え / Close |
+| 音量調整 (B on vol) | A4 440 Hz | 150 ms | 新音量のプレビュー |
+
+### 音量スケール
+
+Config の 0〜8 設定は対数テーブルで実際の `setVolume()` 値に変換する。
+人間の聴覚は対数特性のため、線形スケールでは高設定での差が知覚しにくい。
+
+```cpp
+static const uint8_t VOL_MAP[9] = {0, 1, 2, 3, 4, 6, 8, 11, 15};
+// 各ステップ約 3 dB, 最大値 15/255
+```
+
+同じテーブルを `main.cpp` (起動時) と `status_report.cpp` (saveVolume) の両方で使う。
+
+---
+
 ## 永続化 (ESP32 Preferences NVS)
 
 namespace: `"fido"` キー: `hunger`, `happy`, `health`, `age`, `coins`, `bond`, `it0`-`it13`, `vol`
