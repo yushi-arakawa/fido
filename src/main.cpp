@@ -7,6 +7,7 @@
 #include "minigame.h"
 #include "shop.h"
 #include "status_report.h"
+#include "nasa_gacha.h"
 #include <Preferences.h>
 
 // Character center on Main screen (full-width, message box at y=155)
@@ -15,6 +16,7 @@ static const int CHAR_CY = 80;
 
 static Pet       pet       = {"Fido", 80, 80, 100, 0, PetMood::Happy};
 static Inventory inv       = {0, 0, {false, false, false, false}};
+static NasaCargo nasaCargo = {};
 static UIMode    uiMode    = UIMode::Main;
 static int       actSel    = 0;
 
@@ -25,7 +27,7 @@ static const unsigned long TICK_MS = 30000;
 // Called on mode switch and after returning from a fullscreen sub-screen.
 static void fullRedraw(const String& msg = "") {
     charAnimRedraw();
-    displayInit(uiMode, pet, inv, actSel);
+    displayInit(uiMode, pet, inv, nasaCargo, actSel);
     if (msg.length() > 0) displayMessage(msg);
 }
 
@@ -65,6 +67,7 @@ static void doAct(int idx) {
 void setup() {
     M5.begin();
     loadAll(pet, inv);
+    loadNasaCargo(nasaCargo);
     lastTick = millis();
     {
         Preferences p;
@@ -87,12 +90,27 @@ void loop() {
         if      (uiMode == UIMode::Main) uiMode = UIMode::Act;
         else if (uiMode == UIMode::Act)  uiMode = UIMode::Back;
         else                             uiMode = UIMode::Main;
+        const char* modeNames[] = {"Main", "Act", "Back"};
+        Serial.printf("[MODE] -> %s\n", modeNames[(int)uiMode]);
         fullRedraw();
     }
 
     // ── Main mode ───────────────────────────────────────────────────────
     if (uiMode == UIMode::Main) {
-        // A: reserved (do nothing)
+        // A: NASA gacha
+        if (M5.BtnA.wasPressed()) {
+            M5.Speaker.tone(131, 60); // C3
+            displayMessage("Scanning space...");
+            String item = runNasaGacha(nasaCargo);
+            if (item == "Cargo full!") {
+                displayMessage("Space cargo full! (8/8)");
+            } else if (item.length() > 0) {
+                saveNasaCargo(nasaCargo);
+                displayMessage("Discovery: " + item);
+            } else {
+                displayMessage("No signal...");
+            }
+        }
 
         // B: Talk (egg stage cannot talk)
         if (M5.BtnB.wasPressed()) {
@@ -137,9 +155,11 @@ void loop() {
         pet.tick();
         if (inv.bond < 1000) inv.bond++;
         saveAll(pet, inv);
+        Serial.printf("[TICK] age:%d energy:%d morale:%d shield:%d bond:%d\n",
+            pet.age, pet.hunger, pet.happiness, pet.health, inv.bond);
         // Refresh live data on Back screen; other modes need no stat update
         if (uiMode == UIMode::Back) {
-            displayBackContent(pet, inv);
+            displayBackContent(pet, inv, nasaCargo);
             displayMenuBar(uiMode, actSel);
         }
     }
