@@ -69,10 +69,10 @@ void setup() {
     {
         Preferences p;
         p.begin("fido", true);
-        uint8_t vol = p.getUChar("vol", 4);
+        uint8_t vol = p.getUChar("vol", 2);
         p.end();
         // ~3dB per step, max=15 (perceptually even spacing)
-        static const uint8_t VOL_MAP[9] = {0, 1, 2, 3, 4, 6, 8, 11, 15};
+        static const uint8_t VOL_MAP[9] = {0, 1, 1, 2, 3, 4, 6, 8, 11};
         M5.Speaker.setVolume(VOL_MAP[vol]);
     }
     fullRedraw("Hello! I'm " + pet.name + "!");
@@ -96,11 +96,15 @@ void loop() {
     if (uiMode == UIMode::Main) {
         // A: reserved (do nothing)
 
-        // B: Talk
+        // B: Talk (egg stage cannot talk)
         if (M5.BtnB.wasPressed()) {
-            M5.Speaker.tone(330, 60); // E4
-            displayMessage("...");
-            displayMessage(askClaude(pet, "How are you feeling?"));
+            if (pet.age < 4) {
+                displayMessage("...(still an egg)");
+            } else {
+                M5.Speaker.tone(330, 60); // E4
+                displayMessage("...");
+                displayMessage(askClaude(pet, "How are you feeling?"));
+            }
         }
     }
 

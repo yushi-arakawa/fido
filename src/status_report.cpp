@@ -8,7 +8,7 @@
 static uint8_t loadVolume() {
     Preferences p;
     p.begin("fido", true);
-    uint8_t v = p.getUChar("vol", 4);
+    uint8_t v = p.getUChar("vol", 2);
     p.end();
     return v;
 }
@@ -19,7 +19,7 @@ static void saveVolume(uint8_t v) {
     p.putUChar("vol", v);
     p.end();
     // ~3dB per step, max=15 (perceptually even spacing)
-    static const uint8_t VOL_MAP[9] = {0, 1, 2, 3, 4, 6, 8, 11, 15};
+    static const uint8_t VOL_MAP[9] = {0, 1, 1, 2, 3, 4, 6, 8, 11};
     M5.Speaker.setVolume(VOL_MAP[v]);
 }
 
@@ -138,6 +138,7 @@ void showSettings(Pet& pet, Inventory& inv) {
                 if (showConfirmDialog("Clear all data?",
                                       "This cannot be undone.",
                                       "[A] Confirm")) {
+                    M5.Speaker.end(); // stop tone before reset
                     Preferences p;
                     p.begin("fido", false);
                     p.clear();

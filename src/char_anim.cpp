@@ -18,7 +18,7 @@ static int      lastCX       = -1;
 static int      lastCY       = -1;
 
 static int stageForAge(uint8_t age) {
-    if (age < 20) return 0;
+    if (age < 4)  return 0; // Egg: ~2 min (4 ticks x 30s)
     if (age < 40) return 1;
     if (age < 60) return 2;
     if (age < 80) return 3;
