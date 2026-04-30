@@ -48,11 +48,14 @@ String runNasaGacha(NasaCargo& cargo) {
     String title = "";
     if (http.GET() == HTTP_CODE_OK) {
         String body = http.getString();
-        title = extractTitle(body);
-        if (title.length() > 23) title = title.substring(0, 23);
-        if (title.length() > 0) {
-            title.toCharArray(cargo.items[cargo.count], 24);
+        String fullTitle = extractTitle(body);
+        if (fullTitle.length() > 0) {
+            // Store truncated version (NVS / Back-screen space limit)
+            String stored = fullTitle.length() > 23 ? fullTitle.substring(0, 23) : fullTitle;
+            stored.toCharArray(cargo.items[cargo.count], 24);
             cargo.count++;
+            // Return display-friendly version (fits "Discovery: <title>" in message box)
+            title = fullTitle.length() > 39 ? fullTitle.substring(0, 36) + "..." : fullTitle;
         }
     }
 

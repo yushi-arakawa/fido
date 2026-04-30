@@ -76,6 +76,7 @@ void setup() {
         p.end();
         M5.Speaker.setVolume(vol ? 1 : 0);
     }
+    charAnimPlayStartup();
     fullRedraw("Hello! I'm " + pet.name + "!");
 }
 
@@ -101,6 +102,7 @@ void loop() {
         if (M5.BtnA.wasPressed()) {
             M5.Speaker.tone(131, 60); // C3
             displayMessage("Scanning space...");
+            M5.Speaker.mute(); // tone duration is polled in M5.update(); stop before blocking WiFi
             String item = runNasaGacha(nasaCargo);
             if (item == "Cargo full!") {
                 displayMessage("Space cargo full! (8/8)");
