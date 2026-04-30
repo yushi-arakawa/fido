@@ -3,8 +3,8 @@
 ## ハードウェア
 
 - **ボード**: M5Stack Basic (ESP32 240MHz, 320×240 TFT LCD, ボタン A/B/C)
-- **フラッシュ**: 4MB (使用中 ~97.8%)
-- **RAM**: 320KB (使用中 ~27.4%)
+- **フラッシュ**: 4MB / パーティション: `huge_app` (アプリ領域 3MB, 使用中 ~57.1%)
+- **RAM**: 320KB (使用中 ~31.1%)
 - **プラットフォーム**: PlatformIO / Arduino framework, M5Stack @ 0.4.6
 - **ビルド**: `pio run -t upload`
 
@@ -18,10 +18,10 @@ Main → Act → Back → Main ...
 
 | 画面 | 内容 | A | B | C |
 |------|------|---|---|---|
-| **Main** | 宇宙背景 + キャラクター(128×128) + メッセージBOX | --- | Talk (Claude API, Egg期は無効) | → Act |
+| **Main** | 宇宙背景 + キャラクター(128×128) + メッセージBOX | Gacha (NASA API) | Talk (Claude API, Egg期は無効) | → Act |
 | **Act** | 左: アクションリスト / 右: Fido生態tips | Move | OK | → Back |
 | **Back** | ステータス全表示（ステータス + カード統合） | Config | --- | → Main |
-| **Config** | 音量(0-8) / 電源OFF / データ削除 | Move | Select | Close |
+| **Config** | 音量(ON/OFF) / 電源OFF / データ削除 | Move | Select | Close |
 
 ---
 
@@ -41,6 +41,9 @@ Main → Act → Back → Main ...
 | `shop.h` | `runShop()` 宣言 |
 | `status_report.h` | `showSettings()`, `showConfirmDialog()` 宣言 |
 | `claude_client.h` | `askClaude()` 宣言 |
+| `nasa_gacha.h` | `NasaCargo` 構造体 (`NASA_CARGO_MAX=8`), `runNasaGacha/saveNasaCargo/loadNasaCargo` 宣言 |
+| `secrets.h` | WiFi認証情報 (`WIFI_SSID`, `WIFI_PASS`) — **gitignore済み、コミット不可** |
+| `secrets.h.example` | `secrets.h` のテンプレート (コミット可) |
 
 ### src/
 
@@ -55,6 +58,7 @@ Main → Act → Back → Main ...
 | `shop.cpp` | スクロール可能ショップ(14アイテム) |
 | `status_report.cpp` | Config画面, 確認ダイアログ |
 | `claude_client.cpp` | Wi-Fi + Anthropic API HTTP通信 |
+| `nasa_gacha.cpp` | WiFi接続 → NASA APOD API (HTTPS) → タイトル抽出 → NVS保存 |
 
 ---
 
@@ -151,34 +155,59 @@ Vitamin / Potion / Steak / Toy Car / P.Hat / Elixir / Star
 
 | ボタン | 周波数 | 長さ | 用途 |
 |--------|--------|------|------|
-| A | C4 262 Hz | 60 ms | Move / Config |
-| B | E4 330 Hz | 60 ms | OK / Talk / 確認 |
-| C | G4 392 Hz | 60 ms | 画面切り替え / Close |
-| 音量調整 (B on vol) | A4 440 Hz | 150 ms | 新音量のプレビュー |
+| A | C3 131 Hz | 60 ms | Move / Config |
+| B | E3 165 Hz | 60 ms | OK / Talk / 確認 |
+| C | G3 196 Hz | 60 ms | 画面切り替え / Close |
+| 音量ON時 (B on vol) | A3 220 Hz | 150 ms | ON時のプレビュー |
 
-### 音量スケール
+### 音量設定
 
-Config の 0〜8 設定は対数テーブルで実際の `setVolume()` 値に変換する。
-人間の聴覚は対数特性のため、線形スケールでは高設定での差が知覚しにくい。
+Config の音量設定は **ON / OFF の二択**。NVS キー `"vol"` に 0 or 1 を保存。
 
 ```cpp
-static const uint8_t VOL_MAP[9] = {0, 1, 1, 1, 2, 2, 3, 4, 6};
-// 各ステップ約 3 dB, 最大値 6/255, デフォルト設定値 2
+M5.Speaker.setVolume(vol ? 1 : 0);
+// ON=1, OFF=0, デフォルト ON (1)
 ```
 
-同じテーブルを `main.cpp` (起動時) と `status_report.cpp` (saveVolume) の両方で使う。
+`main.cpp` (起動時) と `status_report.cpp` (saveVolume) の両方で同じロジックを使う。
 データ削除・再起動前は `M5.Speaker.end()` でスピーカーを停止してからリセットする。
+
+---
+
+## NASAガチャ (nasa_gacha.cpp)
+
+Main画面の [A] ボタンで起動。WiFi接続後、NASA APOD API からランダムな日付の天文写真タイトルを取得してカーゴに追加する。
+
+```cpp
+struct NasaCargo {
+    char    items[NASA_CARGO_MAX][24]; // APODタイトル (最大23文字 + null)
+    uint8_t count;                     // 現在の件数 (max 8)
+};
+```
+
+- **API**: `https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY&date=YYYY-MM-DD`
+- **日付範囲**: 2000〜2025年のランダム日付 (`esp_random()` でシード)
+- **タイトル抽出**: `"title":` をキーにした軽量文字列検索 (JSON パーサー不使用)
+- **表示**: Back画面最下部「Space:」セクション (最大8件、折り返し表示)
+- **認証情報**: `include/secrets.h` に `WIFI_SSID` / `WIFI_PASS` を定義 (gitignore済み)
+
+### セットアップ
+```
+cp include/secrets.h.example include/secrets.h
+# secrets.h 内の WIFI_SSID / WIFI_PASS を書き換える
+```
 
 ---
 
 ## 永続化 (ESP32 Preferences NVS)
 
-namespace: `"fido"` キー: `hunger`, `happy`, `health`, `age`, `coins`, `bond`, `it0`-`it13`, `vol`
+namespace: `"fido"` キー: `hunger`, `happy`, `health`, `age`, `coins`, `bond`, `it0`-`it13`, `vol`, `nc`, `nc0`-`nc7`
 
 ---
 
 ## 既知の制約
 
-- フラッシュ残量が少ない (~2%)。スプライトを増やす場合は SD カード経由が必要
-- SD カード方式は `sdcard/char/*.bin` (128×128 バイナリ) をカードの `/char/` にコピーすれば移行可能 (`convert_sprites.py` を `SIZE=128` に変更して再実行)
+- `huge_app` パーティション使用によりアプリ領域は 3MB。OTA パーティションなし
+- NASA APOD `DEMO_KEY` のレート制限: 30 req/hour, 50 req/day
+- スプライトを増やす場合は SD カード経由が必要 (`convert_sprites.py` を `SIZE=128` に変更)
 - `sprite_data.h` は旧ファイル (未使用、削除可)

@@ -1,5 +1,6 @@
 #include "display.h"
 #include "space_ui.h"
+#include "nasa_gacha.h"
 #include <M5Stack.h>
 
 static const int MSG_Y  = 155;
@@ -74,6 +75,7 @@ static const char* advisorMsg(const Pet& pet) {
 static const char* ACT_LABELS[] = { "Feed", "Play", "Game", "Shop" };
 
 void displayActContent(int sel) {
+    Serial.printf("[ACT] selected: %s\n", ACT_LABELS[sel]);
     // Left panel: action list
     M5.Lcd.fillRect(0, 0, PDIV, MSG_Y, SM_BG);
     M5.Lcd.fillRect(0, 0, PDIV, 22, SM_HDR);
@@ -131,7 +133,14 @@ void displayActContent(int sel) {
 
 // ── Back content (noise-safe) ─────────────────────────────────────────────
 
-void displayBackContent(const Pet& pet, const Inventory& inv) {
+void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& nasa) {
+    int owned = 0;
+    for (int i = 0; i < ITEM_COUNT; i++) if (inv.owned[i]) owned++;
+    Serial.printf("[BACK] %s [%s] Day%d | Energy:%d Morale:%d Shield:%d | Mood:%s | Bond:%d/1000 $%d Items:%d/%d | %s\n",
+        pet.name.c_str(), stageName(pet.age), pet.age,
+        pet.hunger, pet.happiness, pet.health,
+        moodLabel(pet.mood), inv.bond, inv.coins, owned, ITEM_COUNT,
+        advisorMsg(pet));
     M5.Lcd.fillRect(0, 0, 320, MENU_Y, SM_BG);
 
     // Header
@@ -179,8 +188,6 @@ void displayBackContent(const Pet& pet, const Inventory& inv) {
     M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
     M5.Lcd.setCursor(SX, 120);
     M5.Lcd.print(moodLabel(pet.mood));
-    int owned = 0;
-    for (int i = 0; i < ITEM_COUNT; i++) if (inv.owned[i]) owned++;
     M5.Lcd.setTextColor(SM_GREY, SM_BG);
     M5.Lcd.setCursor(150, 120);
     M5.Lcd.printf("Items: %d/%d", owned, ITEM_COUNT);
@@ -217,12 +224,35 @@ void displayBackContent(const Pet& pet, const Inventory& inv) {
     M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
     M5.Lcd.print(advisorMsg(pet));
 
+    // NASA gacha cargo
+    M5.Lcd.drawFastHLine(0, 178, 320, SM_DIV);
+    M5.Lcd.setTextColor(SM_GREY, SM_BG);
+    M5.Lcd.setCursor(SX, 184);
+    M5.Lcd.print("Space: ");
+    if (nasa.count == 0) {
+        M5.Lcd.setTextColor(SM_DIM, SM_BG);
+        M5.Lcd.setCursor(SX + 42, 184);
+        M5.Lcd.print("--");
+    } else {
+        int ncx = SX + 42, ncy = 184;
+        for (uint8_t i = 0; i < nasa.count; i++) {
+            int w = strlen(nasa.items[i]) * 6 + 4;
+            if (ncx + w > 314) { ncx = SX + 42; ncy += 10; }
+            if (ncy > 206) break;
+            M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
+            M5.Lcd.setCursor(ncx, ncy);
+            M5.Lcd.print(nasa.items[i]);
+            ncx += w;
+        }
+    }
+
     spCornerFrame(0, 0, 320, MENU_Y);
 }
 
 // ── Message box ───────────────────────────────────────────────────────────
 
 void displayMessage(const String& msg) {
+    Serial.printf("[MSG] %s\n", msg.c_str());
     M5.Lcd.fillRect(1, MSG_Y + 1, 318, MSG_H - 2, SM_HDR);
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(SM_LIGHT, SM_HDR);
@@ -241,7 +271,7 @@ void displayMenuBar(UIMode mode, int /*sel*/) {
 
     switch (mode) {
         case UIMode::Main:
-            M5.Lcd.setTextColor(SM_DIM,   SM_BG); M5.Lcd.setCursor(10,  MENU_Y + 7); M5.Lcd.print("[A] ---");
+            M5.Lcd.setTextColor(SM_LIGHT, SM_BG); M5.Lcd.setCursor(10,  MENU_Y + 7); M5.Lcd.print("[A] Gacha");
             M5.Lcd.setTextColor(SM_WHITE, SM_BG); M5.Lcd.setCursor(115, MENU_Y + 7); M5.Lcd.print("[B] Talk");
             M5.Lcd.setTextColor(SM_LIGHT, SM_BG); M5.Lcd.setCursor(225, MENU_Y + 7); M5.Lcd.print("[C] Act");
             break;
@@ -260,7 +290,7 @@ void displayMenuBar(UIMode mode, int /*sel*/) {
 
 // ── Full init (background + all content) ─────────────────────────────────
 
-void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, int sel) {
+void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, const NasaCargo& nasa, int sel) {
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
 
@@ -273,7 +303,7 @@ void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, int sel) {
             displayMessage("");
             break;
         case UIMode::Back:
-            displayBackContent(pet, inv);
+            displayBackContent(pet, inv, nasa);
             break;
     }
     displayMenuBar(mode, sel);
