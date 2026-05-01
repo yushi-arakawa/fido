@@ -1,6 +1,10 @@
 #pragma once
 #include <stdint.h>
 
-// Shows a game selection menu and runs the chosen mini-game.
-// Returns coins earned.
+// ミニゲーム選択メニューを表示し、選ばれたゲームを実行してから戻る。
+// C ボタンで戻るとコイン 0 で抜ける。
+// 戻り値: 獲得コイン数 (各ゲームの上限はゲーム個別)。
+//
+// ゲームを追加する場合は minigame.cpp の GAMES[] テーブルに
+// {表示名, 関数ポインタ} を追記するだけで自動的にメニューに乗る。
 uint16_t runGameMenu();

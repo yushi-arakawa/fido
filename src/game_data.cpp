@@ -1,6 +1,15 @@
 #include "game_data.h"
 #include <Preferences.h>
 
+// NVS namespace 名は全モジュールで共有されている ("fido" 固定)。
+// 変更すると過去のセーブデータが読めなくなるので注意。
+// 同じ namespace 内のキーは status_report.cpp (vol)、nasa_gacha.cpp (nc/nc0..) も使用。
+static const char* NVS_NS = "fido";
+
+// ─── アイテムマスター ───────────────────────────────────────────────────
+// 並び順は NVS の "it0".."it13" のインデックスとして固定されている。
+// 並び替えると過去のセーブデータの「所有/未所有」がズレるので絶対に動かさない。
+// 末尾追加のみ可。
 const ItemDef ITEM_DEFS[ITEM_COUNT] = {
     {"Apple",    3,  "+20 Hunger",    20,  0,   0 },
     {"Ball",     5,  "+15 Happy",      0, 15,   0 },
@@ -18,6 +27,8 @@ const ItemDef ITEM_DEFS[ITEM_COUNT] = {
     {"Star",    30,  "+max Happy",     0, 50,  10 },
 };
 
+// アイテム効果をペットに適用。ショップ購入時のみ呼ばれる。
+// 各値は 0-100 でクランプされる (オーバーフロー防止)。
 void applyItem(Pet& pet, int idx) {
     pet.hunger    = min(100, (int)pet.hunger    + ITEM_DEFS[idx].hungerBoost);
     pet.happiness = min(100, (int)pet.happiness + ITEM_DEFS[idx].happyBoost);
@@ -25,15 +36,19 @@ void applyItem(Pet& pet, int idx) {
     pet.mood      = pet.calcMood();
 }
 
+// 全データを NVS に保存。30秒 tick ごとに呼ばれるので
+// 余計な書き込みは増やさないこと (フラッシュ寿命に直結)。
 void saveAll(const Pet& pet, const Inventory& inv) {
     Preferences p;
-    p.begin("fido", false);
+    p.begin(NVS_NS, false);
     p.putUChar("hunger", pet.hunger);
     p.putUChar("happy",  pet.happiness);
     p.putUChar("health", pet.health);
     p.putUChar("age",    pet.age);
     p.putUShort("coins", inv.coins);
     p.putUShort("bond",  inv.bond);
+    // アイテム所有フラグを "it0".."it13" のキーで保存。
+    // ITEM_COUNT 変更時の後方互換は Inventory.owned[14] 固定で担保している。
     for (int i = 0; i < ITEM_COUNT; i++) {
         char key[8];
         snprintf(key, sizeof(key), "it%d", i);
@@ -42,9 +57,11 @@ void saveAll(const Pet& pet, const Inventory& inv) {
     p.end();
 }
 
+// NVS から復元。キーが存在しない場合 (初回起動・Clear data 後) は
+// 第2引数のデフォルト値が使われる: HP満タン気味、コイン0、所有なし。
 void loadAll(Pet& pet, Inventory& inv) {
     Preferences p;
-    p.begin("fido", true);
+    p.begin(NVS_NS, true); // read-only モード
     pet.hunger    = p.getUChar("hunger", 80);
     pet.happiness = p.getUChar("happy",  80);
     pet.health    = p.getUChar("health", 100);

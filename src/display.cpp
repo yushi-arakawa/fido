@@ -3,15 +3,24 @@
 #include "nasa_gacha.h"
 #include <M5Stack.h>
 
-static const int MSG_Y  = 155;
-static const int MSG_H  = 63;   // 155+63 = 218
-static const int MENU_Y = 218;
-static const int MENU_H = 22;
-static const int PDIV   = 165;  // left/right panel split in Act mode
-static const int SX     = 8;    // stat text x
+// ─── 画面レイアウト定数 ──────────────────────────────────────────────────
+// 320x240 の TFT を以下の領域に分割している:
+//   y=  0..154   : メイン領域 (Act ではアクション一覧 / Back ではステータス全体)
+//   y=155..217   : メッセージ BOX (Main/Act 共通)
+//   y=218..239   : ボタンガイド帯
+// 数値を変える場合は char_anim の CHAR_CY=80 や displayBackContent の
+// y 座標群とも整合させること。
+static const int MSG_Y  = 155;  // メッセージ BOX の上端
+static const int MSG_H  = 63;   // メッセージ BOX の高さ (155+63=218 = MENU_Y と一致)
+static const int MENU_Y = 218;  // ボタンガイド帯の上端
+static const int MENU_H = 22;   // ボタンガイド帯の高さ
+static const int PDIV   = 165;  // Act 画面の左/右パネル境界 X
+static const int SX     = 8;    // 各画面のテキスト基準 X
 
-// ── Fido tips (right panel in Act mode) ──────────────────────────────────
-
+// ─── Act 画面右パネル "Fido tips" ──────────────────────────────────────
+// 2行に分かれた tips を 10秒ごとに巡回表示する (displayActContent の
+// `(millis() / 10000) % 10` で index を決定)。
+// 増やす場合は L1/L2 を必ず同数で揃え、ループ側の `% 10` も合わせて更新する。
 static const char* TIPS_L1[10] = {
     "Feeds on stray photons",
     "Stretches 3 light-years",
@@ -39,14 +48,22 @@ static const char* TIPS_L2[10] = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
+// ステージ表示名。閾値は pet.h::stageForAge() に集約してあるので、
+// この関数は単なる enum→文字列のマッピングだけ。
+// (旧実装は age<20=Egg と書かれていてスプライト側の age<4=Egg と矛盾していた)
 static const char* stageName(uint8_t age) {
-    if (age < 20) return "Egg";
-    if (age < 40) return "Child";
-    if (age < 60) return "Teen";
-    if (age < 80) return "Young";
-    return "Elder";
+    switch (stageForAge(age)) {
+        case STAGE_EGG:   return "Egg";
+        case STAGE_CHILD: return "Child";
+        case STAGE_TEEN:  return "Teen";
+        case STAGE_YOUNG: return "Young";
+        case STAGE_ELDER: return "Elder";
+    }
+    return "?";
 }
 
+// PetMood 列挙値 → 表示文字列 (絵文字風 ASCII suffix 付き)。
+// Back 画面のステータス表示と Advisor 行で使う。
 static const char* moodLabel(PetMood m) {
     switch (m) {
         case PetMood::Happy:   return "Happy  :D";
@@ -57,6 +74,9 @@ static const char* moodLabel(PetMood m) {
     }
 }
 
+// アドバイザーのメッセージ。stat の閾値で優先順位を決めて1つ返す。
+// pet.cpp::calcMood() のしきい値と概念的に重複しているので、片方だけ
+// 編集すると整合が崩れる点に注意 (例: hunger<20 を変えるなら両方触る)。
 static const char* advisorMsg(const Pet& pet) {
     if (pet.health    < 30) return "Hull breach! Help me!";
     if (pet.hunger    < 20) return "Fuel critical. Feed me!";
@@ -70,8 +90,11 @@ static const char* advisorMsg(const Pet& pet) {
     return "Systems stable.";
 }
 
-// ── Act content (noise-safe: no background touch) ────────────────────────
-
+// ─── Act 画面のコンテンツ部分 (背景には触れない) ───────────────────────
+// 左パネル (アクション一覧) と右パネル (Fido tips) を分割描画。
+// 行ハイライトは selected のみ SM_SEL 色 + 左 3px のアクセントバー。
+// アクション項目を追加する時は ACT_LABELS と main.cpp::doAct の case を
+// 同じインデックスで更新すること。配列要素数 4 はループの `% 4` にも依存。
 static const char* ACT_LABELS[] = { "Feed", "Play", "Game", "Shop" };
 
 void displayActContent(int sel) {
@@ -131,8 +154,11 @@ void displayActContent(int sel) {
     spCornerFrame(PDIV, 0, RW, MSG_Y);
 }
 
-// ── Back content (noise-safe) ─────────────────────────────────────────────
-
+// ─── Back 画面 (ステータス全表示) ──────────────────────────────────────
+// 上から: ヘッダ (名前/ステージ/Day) → 絆 + コイン → ステータスバー3本 →
+//        Mood + アイテム数 → Cargo (アイテム名) → Advisor → Space (NASA).
+// 30秒 tick ごとに main.cpp から再描画される (背景非破壊)。
+// 行 y 座標を変える時は MENU_Y=218 を超えないように注意。
 void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& nasa) {
     int owned = 0;
     for (int i = 0; i < ITEM_COUNT; i++) if (inv.owned[i]) owned++;
@@ -228,29 +254,26 @@ void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& n
     M5.Lcd.drawFastHLine(0, 178, 320, SM_DIV);
     M5.Lcd.setTextColor(SM_GREY, SM_BG);
     M5.Lcd.setCursor(SX, 184);
-    M5.Lcd.print("Space: ");
     if (nasa.count == 0) {
-        M5.Lcd.setTextColor(SM_DIM, SM_BG);
-        M5.Lcd.setCursor(SX + 42, 184);
-        M5.Lcd.print("--");
+        M5.Lcd.print("Space: --");
     } else {
-        int ncx = SX + 42, ncy = 184;
-        for (uint8_t i = 0; i < nasa.count; i++) {
-            int w = strlen(nasa.items[i]) * 6 + 4;
-            if (ncx + w > 314) { ncx = SX + 42; ncy += 10; }
-            if (ncy > 206) break;
+        M5.Lcd.printf("Space:(%u)", nasa.count);
+        // Show last 2 titles, one per line (y=194, 204)
+        int show = min((int)nasa.count, 2);
+        int base = (int)nasa.count - show;
+        for (int i = 0; i < show; i++) {
             M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
-            M5.Lcd.setCursor(ncx, ncy);
-            M5.Lcd.print(nasa.items[i]);
-            ncx += w;
+            M5.Lcd.setCursor(SX + 4, 194 + i * 10);
+            M5.Lcd.print(nasa.items[base + i]);
         }
     }
 
     spCornerFrame(0, 0, 320, MENU_Y);
 }
 
-// ── Message box ───────────────────────────────────────────────────────────
-
+// ─── 画面下のメッセージ BOX ────────────────────────────────────────────
+// Main / Act 画面の y=155..217 を独占する横長エリア。
+// 一時的な通知用なので、Back 画面では使わない (上書きするとステータスが消える)。
 void displayMessage(const String& msg) {
     Serial.printf("[MSG] %s\n", msg.c_str());
     M5.Lcd.fillRect(1, MSG_Y + 1, 318, MSG_H - 2, SM_HDR);
@@ -262,8 +285,10 @@ void displayMessage(const String& msg) {
     spCornerFrame(0, MSG_Y, 320, MSG_H);
 }
 
-// ── Bottom menu bar ───────────────────────────────────────────────────────
-
+// ─── 最下段ボタンガイド ────────────────────────────────────────────────
+// 各画面の A/B/C ボタン用ラベルを描画。アクティブな機能 (B 中心) は
+// SM_WHITE、無効/未割当は SM_DIM で表現することで誤操作を減らしている。
+// sel は将来的に画面ごとに動的なラベルを出す余地として残してある (現状未使用)。
 void displayMenuBar(UIMode mode, int /*sel*/) {
     M5.Lcd.fillRect(0, MENU_Y, 320, MENU_H, SM_BG);
     M5.Lcd.drawFastHLine(0, MENU_Y, 320, SM_DIV);
@@ -288,8 +313,11 @@ void displayMenuBar(UIMode mode, int /*sel*/) {
     }
 }
 
-// ── Full init (background + all content) ─────────────────────────────────
-
+// ─── フル初期化 (背景 + 全コンテンツ) ──────────────────────────────────
+// 重い処理 (背景グラデ + 星空 + 各画面のコンテンツ)。
+// 画面遷移直後やサブ画面 (ショップ等) から戻った時にだけ呼ぶこと。
+// Main 画面ではキャラスプライトはここでは描画されないので、続く
+// charAnimUpdate() で描画される (キャラを別レイヤー扱いするための分離)。
 void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, const NasaCargo& nasa, int sel) {
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);

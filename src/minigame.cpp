@@ -2,8 +2,17 @@
 #include "space_ui.h"
 #include <M5Stack.h>
 
-// ── helpers ────────────────────────────────────────────────────────────────
+// ─── ミニゲーム集 ──────────────────────────────────────────────────────
+// 各ゲームは「指示画面 → 本編ループ → 結果画面」の3段構成。
+// 共通のコイン報酬関数は持たず、ゲームごとに難易度に応じた報酬計算をしている。
+// 新規ゲームを追加する場合は:
+//   1. uint16_t gameXxx() 関数を実装する (戻り値=獲得コイン)
+//   2. ファイル末尾の GAMES[] テーブルに { "表示名", gameXxx } を追加
+// だけで OK。runGameMenu() 側は自動的にスクロール対応。
 
+// ─── 共通ヘルパー ──────────────────────────────────────────────────────
+
+// 指示画面 (タイトル + 説明 1-2 行) を wait ms 表示する。
 static void msgScreen(const char* line1, const char* line2 = nullptr, uint32_t wait = 2000) {
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
@@ -22,6 +31,7 @@ static void msgScreen(const char* line1, const char* line2 = nullptr, uint32_t w
     delay(wait);
 }
 
+// 各ゲーム終了後の共通結果表示 (Game Over + 獲得コイン)。
 static void showResult(uint16_t earned) {
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
@@ -624,13 +634,15 @@ static uint16_t gameLuckyRoll() {
     return earned;
 }
 
-// ── Game selection menu ────────────────────────────────────────────────────
+// ─── ゲーム選択メニュー ────────────────────────────────────────────────
 
+// メニュー1行分の登録情報。fn が NULL の項目は作らないこと。
 struct GameEntry {
-    const char* name;
-    uint16_t (*fn)();
+    const char* name;     // 表示名 (英数 ~10文字以内)
+    uint16_t (*fn)();     // ゲーム本体。戻り値が獲得コイン。
 };
 
+// 並び順がメニュー上の順番。新規ゲームは末尾追加が安全。
 static const GameEntry GAMES[] = {
     {"Reaction",   gameReaction  },
     {"Btn Mash",   gameButtonMash},
@@ -645,9 +657,9 @@ static const GameEntry GAMES[] = {
     {"Lucky Roll", gameLuckyRoll },
 };
 static const int GAME_COUNT = (int)(sizeof(GAMES) / sizeof(GAMES[0]));
-static const int VISIBLE = 5;
+static const int VISIBLE    = 5; // 同時表示行数 (shop と同じパターン)
 
-// Content-only redraw — does NOT touch the background.
+// 背景には触れずコンテンツだけ書き換える軽量再描画 (チラつき抑止)。
 static void drawGameMenuContent(int sel) {
     // Header strip
     M5.Lcd.fillRect(0, 0, 320, 28, SM_HDR);
@@ -683,10 +695,13 @@ static void drawGameMenuContent(int sel) {
     M5.Lcd.setTextColor(SM_GREY,  SM_HDR); M5.Lcd.setCursor(225, 220); M5.Lcd.print("[C] Back");
 }
 
+// ミニゲーム選択 → 実行 → 結果表示 → 戻る。
+// A=選択移動 / B=決定 (ゲーム実行) / C=戻る (コイン 0 で抜ける)。
+// 戻り値は獲得コイン。ゲーム実行後はそのまま呼び出し元へ戻る (Act 画面)。
 uint16_t runGameMenu() {
     int sel = 0;
 
-    // Background drawn once on entry; navigation only redraws content.
+    // 背景は入口で1回だけ。navigation は drawGameMenuContent でコンテンツだけ更新。
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
     spCornerFrame(0, 0, 320, 240);
