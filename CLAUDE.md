@@ -243,4 +243,3 @@ namespace: `"fido"` キー: `hunger`, `happy`, `health`, `age`, `coins`, `bond`,
 - `huge_app` パーティション使用によりアプリ領域は 3MB。OTA パーティションなし
 - NASA APOD `DEMO_KEY` のレート制限: 30 req/hour, 50 req/day
 - スプライトを増やす場合は SD カード経由が必要 (`convert_sprites.py` を `SIZE=128` に変更)
-- `sprite_data.h` は旧ファイル (未使用、削除可)
