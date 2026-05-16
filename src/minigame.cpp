@@ -1,5 +1,6 @@
 #include "minigame.h"
 #include "space_ui.h"
+#include "remote.h"
 #include <M5Stack.h>
 
 // ─── ミニゲーム集 ──────────────────────────────────────────────────────
@@ -83,8 +84,8 @@ static uint16_t gameReaction() {
         uint32_t t0 = millis();
         bool pressed = false;
         while (millis() - t0 < 3000) {
-            M5.update();
-            if (M5.BtnB.wasPressed()) { pressed = true; break; }
+            M5.update(); remoteSync();
+            if (btnB()) { pressed = true; break; }
             delay(10);
         }
         uint32_t ms = millis() - t0;
@@ -120,8 +121,8 @@ static uint16_t gameButtonMash() {
     uint32_t end = millis() + 5000;
     int count = 0;
     while (millis() < end) {
-        M5.update();
-        if (M5.BtnB.wasPressed()) count++;
+        M5.update(); remoteSync();
+        if (btnB()) count++;
         M5.Lcd.setTextSize(2);
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
         M5.Lcd.setCursor(110, 155);
@@ -186,10 +187,10 @@ static uint16_t gameSimon() {
             uint32_t t0 = millis();
             int got = -1;
             while (millis() - t0 < 4000 && got < 0) {
-                M5.update();
-                if (M5.BtnA.wasPressed()) got = 0;
-                if (M5.BtnB.wasPressed()) got = 1;
-                if (M5.BtnC.wasPressed()) got = 2;
+                M5.update(); remoteSync();
+                if (btnA()) got = 0;
+                if (btnB()) got = 1;
+                if (btnC()) got = 2;
                 delay(10);
             }
             if (got != seq[i]) ok = false;
@@ -250,8 +251,8 @@ static uint16_t gameRhythm() {
         uint32_t flashStart = millis();
         bool hit = false;
         while (millis() - flashStart < WINDOW) {
-            M5.update();
-            if (M5.BtnB.wasPressed()) { hit = true; break; }
+            M5.update(); remoteSync();
+            if (btnB()) { hit = true; break; }
             delay(10);
         }
         if (hit) hits++;
@@ -286,8 +287,8 @@ static uint16_t gameLuckySpin() {
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
         M5.Lcd.setCursor(70, 180);
         M5.Lcd.print("Press B to STOP");
-        M5.update();
-        if (M5.BtnB.wasPressed()) {
+        M5.update(); remoteSync();
+        if (btnB()) {
             uint16_t earned = (num == 7) ? 10 : (num % 2 == 0) ? 3 : 1;
             M5.Lcd.fillScreen(TFT_BLACK);
             M5.Lcd.setTextSize(3);
@@ -334,10 +335,10 @@ static uint16_t gameWhack() {
         uint32_t t0 = millis();
         int got = -1;
         while (millis() - t0 < 1500 && got < 0) {
-            M5.update();
-            if (M5.BtnA.wasPressed()) got = 0;
-            if (M5.BtnB.wasPressed()) got = 1;
-            if (M5.BtnC.wasPressed()) got = 2;
+            M5.update(); remoteSync();
+            if (btnA()) got = 0;
+            if (btnB()) got = 1;
+            if (btnC()) got = 2;
             delay(10);
         }
 
@@ -398,8 +399,8 @@ static uint16_t gamePrecision() {
             prevPos = pos;
         }
 
-        M5.update();
-        if (M5.BtnB.wasPressed()) {
+        M5.update(); remoteSync();
+        if (btnB()) {
             bool inZone = (prevPos >= GREEN_START && prevPos < GREEN_END);
             int  mid    = GREEN_START + (GREEN_END - GREEN_START) / 2;
             uint16_t earned = inZone ? 7 : (abs(prevPos - mid) < 30 ? 2 : 0);
@@ -455,10 +456,10 @@ static uint16_t gameMath() {
         uint32_t t0 = millis();
         int got = -1;
         while (millis() - t0 < 5000 && got < 0) {
-            M5.update();
-            if (M5.BtnA.wasPressed()) got = 0;
-            if (M5.BtnB.wasPressed()) got = 1;
-            if (M5.BtnC.wasPressed()) got = 2;
+            M5.update(); remoteSync();
+            if (btnA()) got = 0;
+            if (btnB()) got = 1;
+            if (btnC()) got = 2;
             delay(10);
         }
 
@@ -508,10 +509,10 @@ static uint16_t gameHotCold() {
 
         bool acted = false;
         while (!acted) {
-            M5.update();
-            if (M5.BtnA.wasPressed()) { guess = min(9, guess + 1); acted = true; }
-            if (M5.BtnC.wasPressed()) { guess = max(1, guess - 1); acted = true; }
-            if (M5.BtnB.wasPressed()) {
+            M5.update(); remoteSync();
+            if (btnA()) { guess = min(9, guess + 1); acted = true; }
+            if (btnC()) { guess = max(1, guess - 1); acted = true; }
+            if (btnB()) {
                 tries++;
                 int diff = abs(guess - secret);
                 if (diff == 0) {
@@ -576,8 +577,8 @@ static uint16_t gameSurvivor() {
         M5.Lcd.setCursor(90, 110);
         M5.Lcd.printf("Time: %ds / 15s", (int)((now - start) / 1000));
 
-        M5.update();
-        if (!danger && (M5.BtnA.wasPressed() || M5.BtnC.wasPressed())) alive = false;
+        M5.update(); remoteSync();
+        if (!danger && (btnA() || btnC())) alive = false;
         delay(50);
     }
 
@@ -603,7 +604,7 @@ static uint16_t gameLuckyRoll() {
     M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
     M5.Lcd.setCursor(60, 100);
     M5.Lcd.print("Press B to roll!");
-    while (true) { M5.update(); if (M5.BtnB.wasPressed()) break; delay(16); }
+    while (true) { M5.update(); remoteSync(); if (btnB()) break; delay(16); }
 
     for (int i = 0; i < 15; i++) {
         int d1 = random(1, 7), d2 = random(1, 7);
@@ -708,17 +709,17 @@ uint16_t runGameMenu() {
     drawGameMenuContent(sel);
 
     while (true) {
-        M5.update();
-        if (M5.BtnA.wasPressed()) {
+        M5.update(); remoteSync();
+        if (btnA()) {
             sel = (sel + 1) % GAME_COUNT;
             drawGameMenuContent(sel);
         }
-        if (M5.BtnB.wasPressed()) {
+        if (btnB()) {
             uint16_t earned = GAMES[sel].fn();
             showResult(earned);
             return earned;
         }
-        if (M5.BtnC.wasPressed()) return 0;
+        if (btnC()) return 0;
         delay(16);
     }
 }

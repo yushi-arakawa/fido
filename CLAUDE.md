@@ -41,6 +41,7 @@ Main → Act → Back → Main ...
 | `shop.h` | `runShop()` 宣言 |
 | `status_report.h` | `showSettings()`, `showConfirmDialog()` 宣言 |
 | `claude_client.h` | `askClaude()` 宣言 |
+| `remote.h` | PC遠隔操作 API (`remoteSync()`, `btnA/B/C()`) |
 | `nasa_gacha.h` | `NasaCargo` 構造体 (`NASA_CARGO_MAX=8`), `runNasaGacha/saveNasaCargo/loadNasaCargo` 宣言 |
 | `secrets.h` | WiFi認証情報 (`WIFI_SSID`, `WIFI_PASS`) — **gitignore済み、コミット不可** |
 | `secrets.h.example` | `secrets.h` のテンプレート (コミット可) |
@@ -58,6 +59,7 @@ Main → Act → Back → Main ...
 | `shop.cpp` | スクロール可能ショップ(14アイテム) |
 | `status_report.cpp` | Config画面, 確認ダイアログ |
 | `claude_client.cpp` | Wi-Fi + Anthropic API HTTP通信 |
+| `remote.cpp` | USBシリアル遠隔操作 (PC→M5Stack ボタン入力) |
 | `nasa_gacha.cpp` | WiFi接続 → NASA APOD API (HTTPS) → タイトル抽出 → NVS保存 |
 
 ---
@@ -196,6 +198,37 @@ struct NasaCargo {
 cp include/secrets.h.example include/secrets.h
 # secrets.h 内の WIFI_SSID / WIFI_PASS を書き換える
 ```
+
+---
+
+## PC遠隔操作 (remote.cpp / fido_remote.html)
+
+USB 接続中、PC から USB シリアル (115200 baud) に 1 文字を送ると物理ボタン
+A/B/C を 1 回押したのと同じイベントが発火する。
+
+| 受信文字 | 動作 |
+|----------|------|
+| `a` / `A` | ボタン A |
+| `b` / `B` | ボタン B |
+| `c` / `C` | ボタン C |
+| その他 (改行・空白等) | 無視 |
+
+### ファームウェア側の仕組み
+
+- `remoteSync()` を **全ての入力ループで `M5.update()` の直後に呼ぶ**。
+  呼ぶたびに前イテレーションの押下フラグを破棄 → シリアルを読み直すため、
+  古い入力が残らない (フラグ寿命 = 1 イテレーション)。
+- `M5.BtnX.wasPressed()` は **`btnX()` に置き換え済み** (= 物理 or 遠隔)。
+  main.cpp / minigame.cpp / shop.cpp / status_report.cpp の全画面が対応。
+- 新しくボタンを読むループを足す場合も同じ規約 (`remoteSync()` + `btnX()`) に従う。
+
+### PC側の操作盤
+
+- `fido_remote.html` — Web Serial API を使う単一 HTML ファイル。
+  Chrome / Edge で開き [接続] → COM ポート選択。A/B/C をクリック、または
+  キーボードの A/B/C キーで操作。`[MODE] -> Xxx` ログを拾ってボタンの
+  ヒント表示を現在の画面に追従させる。
+- シリアルモニタ (`pio device monitor`) で `a`/`b`/`c` を直接打っても可。
 
 ---
 

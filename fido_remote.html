@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<!--
+  fido リモコン — PC から M5Stack を遠隔操作する Web 操作盤
+
+  使い方:
+    1. M5Stack を USB で PC に接続する
+    2. このファイルを Chrome または Edge で開く (ダブルクリックで可)
+    3. [接続] を押し、ポップアップで M5Stack の COM ポートを選ぶ
+    4. 画面の A / B / C ボタンをクリック、またはキーボードの A/B/C キーを押す
+
+  仕組み:
+    Web Serial API でシリアル(115200 baud)に 'a'/'b'/'c' の 1 文字を送るだけ。
+    M5Stack 側 (src/remote.cpp) がこれを物理ボタン押下として処理する。
+    Web Serial API は Chrome系ブラウザ専用 (Firefox/Safari 非対応)。
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fido リモコン</title>
+<style>
+  :root { --bg:#000; --hdr:#0a1830; --grey:#7BEF9c; --light:#bdf7c0; --sel:#294560; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; min-height:100vh; background:#000; color:#bdf7c0;
+    font-family:"Consolas","Courier New",monospace;
+    display:flex; flex-direction:column; align-items:center; gap:18px; padding:24px;
+  }
+  h1 { font-size:20px; letter-spacing:2px; margin:0; color:#fff; }
+  .panel {
+    width:360px; background:#06101f; border:1px solid #2a3a55;
+    border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:14px;
+  }
+  .status { display:flex; align-items:center; gap:8px; font-size:13px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#553; }
+  .dot.on { background:#5f5; box-shadow:0 0 8px #5f5; }
+  button {
+    font-family:inherit; cursor:pointer; border-radius:8px;
+    border:1px solid #3a5070; background:#13243c; color:#bdf7c0;
+  }
+  button:hover:not(:disabled) { background:#1d3050; }
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  #connectBtn { padding:10px; font-size:14px; }
+  .btnrow { display:flex; gap:12px; }
+  .btn {
+    flex:1; padding:18px 6px; display:flex; flex-direction:column;
+    align-items:center; gap:6px; font-size:13px; transition:transform .05s;
+  }
+  .btn .key { font-size:26px; font-weight:bold; color:#fff; }
+  .btn .hint { color:#7d93b0; font-size:12px; }
+  .btn:active:not(:disabled), .btn.flash { background:#2a4560; transform:scale(.96); }
+  .log {
+    height:140px; overflow-y:auto; background:#02080f; border:1px solid #1e2c42;
+    border-radius:6px; padding:8px; font-size:11px; color:#6f8aa8;
+    white-space:pre-wrap; word-break:break-all;
+  }
+  .note { font-size:11px; color:#55708e; text-align:center; line-height:1.5; }
+</style>
+</head>
+<body>
+  <h1>🛰  fido リモコン</h1>
+  <div class="panel">
+    <div class="status">
+      <span class="dot" id="dot"></span>
+      <span id="statusText">未接続</span>
+    </div>
+    <button id="connectBtn">接続</button>
+
+    <div class="btnrow">
+      <button class="btn" data-cmd="a" disabled>
+        <span class="key">A</span><span class="hint" id="hintA">Gacha</span>
+      </button>
+      <button class="btn" data-cmd="b" disabled>
+        <span class="key">B</span><span class="hint" id="hintB">Talk</span>
+      </button>
+      <button class="btn" data-cmd="c" disabled>
+        <span class="key">C</span><span class="hint" id="hintC">→ Act</span>
+      </button>
+    </div>
+
+    <div class="log" id="log">シリアルログ...</div>
+    <div class="note">
+      キーボードの A / B / C キーでも操作できます。<br>
+      Chrome または Edge で開いてください。
+    </div>
+  </div>
+
+<script>
+// ─── 画面ごとの A/B/C ボタンの意味 (CLAUDE.md の画面構成表より) ──────────
+// M5Stack が起動時/画面切替時に "[MODE] -> Main" 等を送ってくるので、
+// それを拾ってボタンのヒント表示を現在の画面に合わせて更新する。
+const HINTS = {
+  Main: { a:'Gacha',  b:'Talk',   c:'→ Act'  },
+  Act:  { a:'Move',   b:'OK',     c:'→ Back' },
+  Back: { a:'Config', b:'—',      c:'→ Main' },
+};
+
+let port = null;       // 接続中の SerialPort
+let writer = null;     // 送信用 writer
+let keepReading = false;
+
+const $ = (id) => document.getElementById(id);
+const dot = $('dot'), statusText = $('statusText'), log = $('log');
+const connectBtn = $('connectBtn');
+const cmdButtons = [...document.querySelectorAll('.btn')];
+
+function logLine(text) {
+  log.textContent = (log.textContent + text).slice(-4000);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setConnected(on) {
+  dot.classList.toggle('on', on);
+  statusText.textContent = on ? '接続中 (115200 baud)' : '未接続';
+  connectBtn.textContent = on ? '切断' : '接続';
+  cmdButtons.forEach(b => b.disabled = !on);
+}
+
+function applyMode(mode) {
+  const h = HINTS[mode];
+  if (!h) return;
+  $('hintA').textContent = h.a;
+  $('hintB').textContent = h.b;
+  $('hintC').textContent = h.c;
+}
+
+// ─── コマンド送信 ('a'/'b'/'c' の 1 文字) ──────────────────────────────
+async function sendCmd(cmd) {
+  if (!writer) return;
+  try {
+    await writer.write(new TextEncoder().encode(cmd));
+    flash(cmd);
+  } catch (e) {
+    logLine('\n[送信エラー] ' + e.message);
+  }
+}
+
+function flash(cmd) {
+  const btn = cmdButtons.find(b => b.dataset.cmd === cmd);
+  if (!btn) return;
+  btn.classList.add('flash');
+  setTimeout(() => btn.classList.remove('flash'), 120);
+}
+
+// ─── 受信ループ: M5Stack からのログを表示し、[MODE] を検出 ──────────────
+async function readLoop() {
+  const decoder = new TextDecoderStream();
+  port.readable.pipeTo(decoder.writable).catch(() => {});
+  const reader = decoder.readable.getReader();
+  let buf = '';
+  while (keepReading) {
+    let result;
+    try { result = await reader.read(); }
+    catch { break; }
+    if (result.done) break;
+    buf += result.value;
+    logLine(result.value);
+    // 行単位で "[MODE] -> Xxx" を探す
+    let nl;
+    while ((nl = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, nl);
+      buf = buf.slice(nl + 1);
+      const m = line.match(/\[MODE\]\s*->\s*(\w+)/);
+      if (m) applyMode(m[1]);
+    }
+  }
+  reader.releaseLock();
+}
+
+async function connect() {
+  try {
+    port = await navigator.serial.requestPort();
+    await port.open({ baudRate: 115200 });
+    writer = port.writable.getWriter();
+    keepReading = true;
+    setConnected(true);
+    logLine('\n--- 接続しました ---\n');
+    readLoop();
+  } catch (e) {
+    logLine('\n[接続エラー] ' + e.message + '\n');
+  }
+}
+
+async function disconnect() {
+  keepReading = false;
+  try {
+    if (writer) { writer.releaseLock(); writer = null; }
+    if (port)   { await port.close(); port = null; }
+  } catch (e) { /* 既に閉じている等 — 無視 */ }
+  setConnected(false);
+  logLine('\n--- 切断しました ---\n');
+}
+
+// ─── イベント結線 ──────────────────────────────────────────────────────
+connectBtn.addEventListener('click', () => port ? disconnect() : connect());
+cmdButtons.forEach(b => b.addEventListener('click', () => sendCmd(b.dataset.cmd)));
+
+// キーボード A/B/C (大文字小文字どちらでも)
+document.addEventListener('keydown', (e) => {
+  if (e.repeat) return; // 押しっぱなし連射を防ぐ
+  const k = e.key.toLowerCase();
+  if (['a','b','c'].includes(k) && writer) { e.preventDefault(); sendCmd(k); }
+});
+
+// Web Serial 非対応ブラウザの案内
+if (!('serial' in navigator)) {
+  connectBtn.disabled = true;
+  statusText.textContent = 'このブラウザは Web Serial 非対応';
+  logLine('Chrome または Edge で開いてください。\n');
+}
+</script>
+</body>
+</html>
