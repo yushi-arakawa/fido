@@ -1,5 +1,6 @@
 #include "status_report.h"
 #include "space_ui.h"
+#include "remote.h"
 #include <M5Stack.h>
 #include <Preferences.h>
 
@@ -48,9 +49,9 @@ bool showConfirmDialog(const char* line1, const char* line2, const char* confirm
     M5.Lcd.setCursor(210, 158); M5.Lcd.print("[C] Cancel");
 
     while (true) {
-        M5.update();
-        if (M5.BtnA.wasPressed()) { M5.Speaker.tone(165, 80); return true; }
-        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(131, 60); return false; }
+        M5.update(); remoteSync();
+        if (btnA()) { M5.Speaker.tone(165, 80); return true; }
+        if (btnC()) { M5.Speaker.tone(131, 60); return false; }
         delay(20);
     }
 }
@@ -115,15 +116,15 @@ void showSettings(Pet& pet, Inventory& inv) {
     drawSettings(sel, vol);
 
     while (true) {
-        M5.update();
+        M5.update(); remoteSync();
 
-        if (M5.BtnA.wasPressed()) {
+        if (btnA()) {
             M5.Speaker.tone(131, 60); // C3 — Move
             sel = (sel + 1) % 3;
             drawSettings(sel, vol);
         }
 
-        if (M5.BtnB.wasPressed()) {
+        if (btnB()) {
             if (sel == 0) {
                 // 音量トグル: 即座に反映 (再起動なし)。
                 // ON にした時だけ A3 を鳴らして「鳴ること」を確認できるようにする。
@@ -160,7 +161,7 @@ void showSettings(Pet& pet, Inventory& inv) {
             }
         }
 
-        if (M5.BtnC.wasPressed()) { M5.Speaker.tone(196, 60); break; } // G3 — Close
+        if (btnC()) { M5.Speaker.tone(196, 60); break; } // G3 — Close
 
         delay(20);
     }

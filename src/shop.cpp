@@ -1,5 +1,6 @@
 #include "shop.h"
 #include "space_ui.h"
+#include "remote.h"
 #include <M5Stack.h>
 
 // 一度に画面に表示するアイテム行数。ITEM_COUNT > VISIBLE で
@@ -96,14 +97,14 @@ void runShop(Pet& pet, Inventory& inv) {
     drawShopContent(sel, inv);
 
     while (running) {
-        M5.update();
+        M5.update(); remoteSync();
 
-        if (M5.BtnA.wasPressed()) {
+        if (btnA()) {
             sel = (sel + 1) % ITEM_COUNT;
             drawShopContent(sel, inv);
         }
 
-        if (M5.BtnB.wasPressed()) {
+        if (btnB()) {
             // 所持済み or コイン不足はサイレントで無視 (UI 側で価格/Owned 表示済み)
             if (!inv.owned[sel] && inv.coins >= ITEM_DEFS[sel].cost) {
                 inv.coins -= ITEM_DEFS[sel].cost;
@@ -124,7 +125,7 @@ void runShop(Pet& pet, Inventory& inv) {
             }
         }
 
-        if (M5.BtnC.wasPressed()) running = false;
+        if (btnC()) running = false;
         delay(16);
     }
 }

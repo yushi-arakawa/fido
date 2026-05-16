@@ -8,6 +8,7 @@
 #include "shop.h"
 #include "status_report.h"
 #include "nasa_gacha.h"
+#include "remote.h"
 #include <Preferences.h>
 
 // ─── キャラ表示位置 ─────────────────────────────────────────────────────
@@ -123,9 +124,10 @@ void setup() {
 // 末尾の delay(16) で約 60fps に制限し ESP 負荷を抑える。
 void loop() {
     M5.update();
+    remoteSync(); // PC からのシリアル遠隔操作 ('a'/'b'/'c') を取り込む
 
     // ── C: 画面循環 Main → Act → Back → Main ────────────────────────────
-    if (M5.BtnC.wasPressed()) {
+    if (btnC()) {
         M5.Speaker.tone(TONE_C, TONE_DUR_MS);
         if      (uiMode == UIMode::Main) uiMode = UIMode::Act;
         else if (uiMode == UIMode::Act)  uiMode = UIMode::Back;
@@ -138,7 +140,7 @@ void loop() {
     // ── Main 画面 ───────────────────────────────────────────────────────
     if (uiMode == UIMode::Main) {
         // A: NASA APOD ガチャ。WiFi 接続のため数秒ブロックする。
-        if (M5.BtnA.wasPressed()) {
+        if (btnA()) {
             M5.Speaker.tone(TONE_A, TONE_DUR_MS);
             displayMessage("Scanning space...");
             // tone() の鳴動は M5.update() 内のポーリングに依存しているため、
@@ -157,7 +159,7 @@ void loop() {
         }
 
         // B: Talk (Egg ステージはまだ喋れない仕様)
-        if (M5.BtnB.wasPressed()) {
+        if (btnB()) {
             if (stageForAge(pet.age) == STAGE_EGG) {
                 displayMessage("...(still an egg)");
             } else {
@@ -170,13 +172,13 @@ void loop() {
 
     // ── Act 画面 ────────────────────────────────────────────────────────
     if (uiMode == UIMode::Act) {
-        if (M5.BtnA.wasPressed()) {
+        if (btnA()) {
             M5.Speaker.tone(TONE_A, TONE_DUR_MS);
             actSel = (actSel + 1) % 4;
             displayActContent(actSel);
             displayMenuBar(uiMode, actSel);
         }
-        if (M5.BtnB.wasPressed()) {
+        if (btnB()) {
             M5.Speaker.tone(TONE_B, TONE_DUR_MS);
             doAct(actSel);
         }
@@ -185,7 +187,7 @@ void loop() {
     // ── Back 画面 ───────────────────────────────────────────────────────
     if (uiMode == UIMode::Back) {
         // A: 設定画面を開く (showSettings 内でブロッキング)
-        if (M5.BtnA.wasPressed()) {
+        if (btnA()) {
             M5.Speaker.tone(TONE_A, TONE_DUR_MS);
             showSettings(pet, inv);
             fullRedraw();
