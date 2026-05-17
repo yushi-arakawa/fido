@@ -12,7 +12,12 @@
     Web Serial API でシリアル(115200 baud)に 'a'/'b'/'c' の 1 文字を送るだけ。
     M5Stack 側 (src/remote.cpp) がこれを物理ボタン押下として処理する。
     Web Serial API は Chrome系ブラウザ専用 (Firefox/Safari 非対応)。
+
+  DEBUG セクション:
+    ステータス (hunger/happiness/health/age) を直接書き換えるデバッグ用 UI。
+    "<文字><数値>\n" の行を送ると M5Stack 側が該当値を設定する。
 -->
+
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
@@ -55,6 +60,16 @@
     white-space:pre-wrap; word-break:break-all;
   }
   .note { font-size:11px; color:#55708e; text-align:center; line-height:1.5; }
+  .debug { border-top:1px solid #2a3a55; padding-top:12px; display:flex;
+           flex-direction:column; gap:8px; }
+  .debug-title { font-size:11px; letter-spacing:1px; color:#7d93b0; }
+  .dbg-row { display:flex; align-items:center; gap:8px; font-size:12px; }
+  .dbg-row label { flex:0 0 78px; color:#bdf7c0; }
+  .dbg-row input {
+    flex:1; min-width:0; font-family:inherit; font-size:13px; padding:5px 7px;
+    background:#02080f; color:#bdf7c0; border:1px solid #2a3a55; border-radius:6px;
+  }
+  .dbg-set { flex:0 0 54px; padding:6px 0; font-size:12px; }
 </style>
 </head>
 <body>
@@ -79,6 +94,31 @@
     </div>
 
     <div class="log" id="log">シリアルログ...</div>
+
+    <div class="debug">
+      <div class="debug-title">DEBUG — ステータス直接設定</div>
+      <div class="dbg-row">
+        <label>Hunger</label>
+        <input type="number" id="dbg-h" min="0" max="100" value="80" disabled>
+        <button class="dbg-set" data-field="h" disabled>Set</button>
+      </div>
+      <div class="dbg-row">
+        <label>Happiness</label>
+        <input type="number" id="dbg-p" min="0" max="100" value="80" disabled>
+        <button class="dbg-set" data-field="p" disabled>Set</button>
+      </div>
+      <div class="dbg-row">
+        <label>Health</label>
+        <input type="number" id="dbg-s" min="0" max="100" value="100" disabled>
+        <button class="dbg-set" data-field="s" disabled>Set</button>
+      </div>
+      <div class="dbg-row">
+        <label>Age</label>
+        <input type="number" id="dbg-g" min="0" max="255" value="0" disabled>
+        <button class="dbg-set" data-field="g" disabled>Set</button>
+      </div>
+    </div>
+
     <div class="note">
       キーボードの A / B / C キーでも操作できます。<br>
       Chrome または Edge で開いてください。
@@ -103,6 +143,8 @@ const $ = (id) => document.getElementById(id);
 const dot = $('dot'), statusText = $('statusText'), log = $('log');
 const connectBtn = $('connectBtn');
 const cmdButtons = [...document.querySelectorAll('.btn')];
+// DEBUG セクションのコントロール (接続中のみ有効化する)
+const dbgControls = [...document.querySelectorAll('.dbg-set, .debug input')];
 
 function logLine(text) {
   log.textContent = (log.textContent + text).slice(-4000);
@@ -114,6 +156,7 @@ function setConnected(on) {
   statusText.textContent = on ? '接続中 (115200 baud)' : '未接続';
   connectBtn.textContent = on ? '切断' : '接続';
   cmdButtons.forEach(b => b.disabled = !on);
+  dbgControls.forEach(c => c.disabled = !on);
 }
 
 function applyMode(mode) {
@@ -124,15 +167,32 @@ function applyMode(mode) {
   $('hintC').textContent = h.c;
 }
 
-// ─── コマンド送信 ('a'/'b'/'c' の 1 文字) ──────────────────────────────
-async function sendCmd(cmd) {
-  if (!writer) return;
+// ─── シリアル送信 (生バイト列) ─────────────────────────────────────────
+async function sendRaw(text) {
+  if (!writer) return false;
   try {
-    await writer.write(new TextEncoder().encode(cmd));
-    flash(cmd);
+    await writer.write(new TextEncoder().encode(text));
+    return true;
   } catch (e) {
     logLine('\n[送信エラー] ' + e.message);
+    return false;
   }
+}
+
+// ─── ボタンコマンド送信 ('a'/'b'/'c' の 1 文字) ────────────────────────
+async function sendCmd(cmd) {
+  if (await sendRaw(cmd)) flash(cmd);
+}
+
+// ─── デバッグコマンド送信 ('<文字><数値>\n') ───────────────────────────
+async function sendDebug(field) {
+  const input = $('dbg-' + field);
+  let v = parseInt(input.value, 10);
+  if (isNaN(v)) { logLine('\n[DEBUG] 数値を入力してください'); return; }
+  const max = field === 'g' ? 255 : 100;
+  v = Math.max(0, Math.min(max, v));
+  input.value = v; // クランプ後の値に揃える
+  if (await sendRaw(field + v + '\n')) logLine('\n[DEBUG] 送信: ' + field + v);
 }
 
 function flash(cmd) {
@@ -194,10 +254,18 @@ async function disconnect() {
 // ─── イベント結線 ──────────────────────────────────────────────────────
 connectBtn.addEventListener('click', () => port ? disconnect() : connect());
 cmdButtons.forEach(b => b.addEventListener('click', () => sendCmd(b.dataset.cmd)));
+document.querySelectorAll('.dbg-set').forEach(b =>
+  b.addEventListener('click', () => sendDebug(b.dataset.field)));
+// 数値入力欄で Enter を押しても送信できるようにする
+document.querySelectorAll('.debug input').forEach(inp =>
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); sendDebug(inp.id.slice(4)); }
+  }));
 
 // キーボード A/B/C (大文字小文字どちらでも)
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return; // 押しっぱなし連射を防ぐ
+  if (e.target.tagName === 'INPUT') return; // 数値入力中は A/B/C を横取りしない
   const k = e.key.toLowerCase();
   if (['a','b','c'].includes(k) && writer) { e.preventDefault(); sendCmd(k); }
 });

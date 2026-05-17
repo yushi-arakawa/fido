@@ -126,6 +126,14 @@ void loop() {
     M5.update();
     remoteSync(); // PC からのシリアル遠隔操作 ('a'/'b'/'c') を取り込む
 
+    // ── PC からのデバッグコマンド (ステータス直接書き換え) ──────────────
+    // "h50\n" 等を受けたら pet に反映 → 保存 → 全画面再描画。age 変更時は
+    // fullRedraw() 内の charAnimRedraw() でスプライトステージも更新される。
+    if (remoteDebugApply(pet)) {
+        saveAll(pet, inv);
+        fullRedraw();
+    }
+
     // ── C: 画面循環 Main → Act → Back → Main ────────────────────────────
     if (btnC()) {
         M5.Speaker.tone(TONE_C, TONE_DUR_MS);
