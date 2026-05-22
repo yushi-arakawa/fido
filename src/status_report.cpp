@@ -27,7 +27,8 @@ static void saveVolume(uint8_t v) {
 }
 
 // ─── 確認ダイアログ ────────────────────────────────────────────────────
-// モーダル風の中央寄せ枠。A=確定 (165Hz E3 を鳴らす), C=キャンセル (131Hz C3)。
+// モーダル風の中央寄せ枠。A=確定 (659Hz E5 を鳴らす), C=キャンセル (523Hz C5)。
+// 周波数は main.cpp の TONE_A/TONE_B/TONE_C と揃える (起動音と同じ高域)。
 // ダイアログ表示中は他の処理は走らない (ブロッキング)。
 bool showConfirmDialog(const char* line1, const char* line2, const char* confirmLabel) {
     spDrawBackground();
@@ -50,8 +51,61 @@ bool showConfirmDialog(const char* line1, const char* line2, const char* confirm
 
     while (true) {
         M5.update(); remoteSync();
-        if (btnA()) { M5.Speaker.tone(165, 80); return true; }
-        if (btnC()) { M5.Speaker.tone(131, 60); return false; }
+        if (btnA()) { M5.Speaker.tone(659, 80); return true; }  // E5 — 確定
+        if (btnC()) { M5.Speaker.tone(523, 60); return false; } // C5 — キャンセル
+        delay(20);
+    }
+}
+
+// ─── 追悼画面 (ペット死亡 → 転生) ──────────────────────────────────────
+// health==0 が CRIT_LIMIT tick 続いて「離脱」した時に main から呼ばれる。
+// 今生の記録と歴代ベストを見せ、ボタン押下で次世代を迎える (転生は呼び出し
+// 側が実施)。下降する別れの和音 (G4→E4→C4) を1度だけ鳴らす。
+void showMemorial(const Pet& pet, const Inventory& inv) {
+    spDrawBackground();
+    spDrawStarfield(0, 0, 320, 240);
+
+    M5.Lcd.setTextColor(SM_WHITE, SM_BG);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(46, 36); M5.Lcd.print("Returned to");
+    M5.Lcd.setCursor(92, 60); M5.Lcd.print("the stars");
+
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
+    M5.Lcd.setCursor(60, 98);
+    M5.Lcd.printf("%s lived to Day %d", pet.name.c_str(), pet.age);
+
+    int stars = min(5, (int)(inv.bond / 200));
+    M5.Lcd.setCursor(60, 112);
+    M5.Lcd.print("Final bond: ");
+    M5.Lcd.setTextColor(SM_WHITE, SM_BG);
+    for (int i = 0; i < 5; i++) M5.Lcd.print(i < stars ? "*" : "-");
+
+    M5.Lcd.setTextColor(SM_DIM, SM_BG);
+    M5.Lcd.setCursor(60, 132);
+    M5.Lcd.printf("Best: Day %d   Bond %d", inv.bestAge, inv.bestBond);
+    M5.Lcd.setCursor(60, 144);
+    M5.Lcd.printf("Generation #%d", inv.rebirths);
+
+    M5.Lcd.drawFastHLine(30, 172, 260, SM_DIV);
+    M5.Lcd.setTextColor(SM_WHITE, SM_BG);
+    M5.Lcd.setCursor(48, 188); M5.Lcd.print("Coins & cargo carry over.");
+    M5.Lcd.setCursor(48, 202); M5.Lcd.print("Press any button to go on");
+
+    spCornerFrame(0, 0, 320, 240);
+
+    // 別れの下降和音 (G4 E4 C4)。startupBeep 相当を直書き (mute で確実に切る)。
+    const uint16_t fnotes[] = {392, 330, 262};
+    for (int i = 0; i < 3; i++) {
+        M5.Speaker.tone(fnotes[i], 240);
+        delay(260);
+        M5.Speaker.mute();
+    }
+
+    // いずれかのボタンで次世代へ。
+    while (true) {
+        M5.update(); remoteSync();
+        if (btnA() || btnB() || btnC()) { M5.Speaker.tone(523, 80); break; }
         delay(20);
     }
 }
@@ -119,7 +173,7 @@ void showSettings(Pet& pet, Inventory& inv) {
         M5.update(); remoteSync();
 
         if (btnA()) {
-            M5.Speaker.tone(131, 60); // C3 — Move
+            M5.Speaker.tone(523, 60); // C5 — Move
             sel = (sel + 1) % 3;
             drawSettings(sel, vol);
         }
@@ -127,10 +181,10 @@ void showSettings(Pet& pet, Inventory& inv) {
         if (btnB()) {
             if (sel == 0) {
                 // 音量トグル: 即座に反映 (再起動なし)。
-                // ON にした時だけ A3 を鳴らして「鳴ること」を確認できるようにする。
+                // ON にした時だけ A5 を鳴らして「鳴ること」を確認できるようにする。
                 vol = 1 - vol;
                 saveVolume(vol);
-                if (vol) M5.Speaker.tone(220, 150); // A3 preview
+                if (vol) M5.Speaker.tone(880, 150); // A5 preview
                 drawSettings(sel, vol);
             } else if (sel == 1) {
                 // 電源 OFF: 確認後 M5.Power.powerOFF() で完全停止。
@@ -161,7 +215,7 @@ void showSettings(Pet& pet, Inventory& inv) {
             }
         }
 
-        if (btnC()) { M5.Speaker.tone(196, 60); break; } // G3 — Close
+        if (btnC()) { M5.Speaker.tone(784, 60); break; } // G5 — Close
 
         delay(20);
     }

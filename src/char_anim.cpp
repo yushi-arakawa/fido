@@ -59,9 +59,30 @@ static void eraseChar(int cx, int cy, int bobY) {
     spDrawBackgroundRect(cx - DW / 2, cy - DH / 2 + bobY, DW, DH);
 }
 
+// 就寝中の "z z Z" を頭上 (描画ボックス右上の内側) に描く。drawChar の直後に
+// 呼ぶ前提。背景透過 (setTextColor 単色) でスプライト上に乗せ、ボックス内
+// (cy-64..) に収めることで次フレームの eraseChar に巻き込まれて消える。
+static void drawSleepZ(int cx, int cy, int bobY) {
+    int bx = cx + 26;             // 右寄り (ボックス右端 cx+64 の内側)
+    int by = cy - 56 + bobY;      // 頭上付近 (ボックス上端 cy-64 の内側)
+    M5.Lcd.setTextColor(SM_WHITE); // 単色 = 背景透過
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(bx, by);          M5.Lcd.print("Z");
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setCursor(bx + 16, by + 6); M5.Lcd.print("z");
+}
+
 // 全画面再描画後に呼ぶ。次の charAnimUpdate() で必ず描画されるよう
 // lastBobY をセンチネル値に戻して差分検出を初期化する。
 void charAnimRedraw() { lastBobY = -999; }
+
+// 転生時に呼ぶ完全リセット。currentStage も未初期化に戻すことで、次回更新の
+// 「stage != currentStage」分岐が currentStage<0 となり進化演出をスキップする。
+void charAnimReset() {
+    currentStage = -1;
+    lastBobY     = -999;
+    lastCX = lastCY = -1;
+}
 
 // ─── 進化エフェクト ────────────────────────────────────────────────────
 // ステージが変わった瞬間に1度だけ呼ばれるブロッキング演出。
@@ -106,16 +127,31 @@ static void playEvolveAnim(int cx, int cy) {
     spDrawBackgroundRect(0, 0, 320, 155);
 }
 
+// ─── 起動音ヘルパー ──────────────────────────────────────────────────
+// 1音を「鳴らす→止める→間を置く」できれいに発音する。
+// charAnimPlayStartup() はブロッキングで M5.update() を回さないため、
+// tone(freq,dur) の自動停止 (SPEAKER::update 依存) が効かない。よって
+// 明示的に mute() して音を切る。これをしないと最後の音が鳴りっぱなしになる。
+static void startupBeep(uint16_t freq, uint16_t onMs, uint16_t gapMs) {
+    M5.Speaker.tone(freq);
+    delay(onMs);
+    M5.Speaker.mute();
+    if (gapMs) delay(gapMs);
+}
+
 // ─── 起動アニメーション ───────────────────────────────────────────────
 // setup() から1回だけ呼ばれるブロッキング演出 (~2秒)。
-// "FIDO" の各文字をアルペジオに合わせて表示するだけ。
+// "FIDO" の各文字を C メジャーの上昇アルペジオに合わせて表示する。
 // 終了後は呼び出し元の fullRedraw() が画面を上書きするので明示的なクリアは不要。
 void charAnimPlayStartup() {
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
 
-    // "FIDO" letter by letter with ascending arpeggio (C4 E4 G4 B4)
-    const uint16_t lnotes[] = {262, 330, 392, 494};
+    // "FIDO" を1文字ずつ、C メジャーの上昇アルペジオ C5 E5 G5 C6 に同期して表示。
+    // 主音 C(オクターブ上) で終える解決進行にして「鳴り切った」感を出す
+    // (旧版は導音 B4 終わりで宙ぶらりんだった)。小型スピーカーが鳴らしやすい
+    // 中〜高域を使う (低い C4 はほぼ聞こえずにごる)。
+    const uint16_t lnotes[] = {523, 659, 784, 1047}; // C5 E5 G5 C6
     const char letters[] = "FIDO";
     M5.Lcd.setTextSize(6);
     M5.Lcd.setTextColor(SM_WHITE, SM_BG);
@@ -124,18 +160,19 @@ void charAnimPlayStartup() {
     for (int i = 0; i < 4; i++) {
         M5.Lcd.setCursor(TX + i * 36, TY);
         M5.Lcd.print(letters[i]);
-        M5.Speaker.tone(lnotes[i], 80);
-        delay(200);
+        startupBeep(lnotes[i], 140, 55); // 約195ms間隔で文字送りと同期
     }
 
-    // Subtitle
+    // Subtitle + 締めのきらめき。E6→C6 と上から主音へ落として終止感を出す。
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(SM_GREY, SM_BG);
     M5.Lcd.setCursor(78, TY + 52);
     M5.Lcd.print("   your space companion");
-    delay(400);
+    startupBeep(1319, 90,  30); // E6 — 軽いきらめき
+    startupBeep(1047, 280, 0);  // C6 — 主音で着地して終止
 
-    delay(600);
+    M5.Speaker.mute(); // 念のため: ゲーム本編へ音を残さない
+    delay(550);
     // fullRedraw() will overwrite the screen; no explicit clear needed
 }
 
@@ -144,7 +181,7 @@ void charAnimPlayStartup() {
 // 2. ステージが変わっていれば進化エフェクト + スプライト再ロード
 // 3. bobY (浮遊オフセット) が前フレームと違えば消去→再描画
 // pushImage() は中で SPI で送るので、変わらない場合はスキップして帯域を節約。
-void charAnimUpdate(uint8_t age, int cx, int cy) {
+void charAnimUpdate(uint8_t age, int cx, int cy, bool sleeping) {
     int stage = (int)stageForAge(age);
 
     // (1) キャラの基準座標が動いた場合、旧位置を消す。lastCX==-1 は初回フレーム。
@@ -164,10 +201,14 @@ void charAnimUpdate(uint8_t age, int cx, int cy) {
     }
 
     // (3) 浮遊アニメーション差分更新。bobY が同じなら何もしない。
-    int bobY = (int)(sinf(millis() * BOB_FREQ) * BOB_AMP);
+    //     就寝中は振幅・周波数を落として穏やかな寝息のような動きにする。
+    float amp  = sleeping ? 1.5f    : BOB_AMP;
+    float freq = sleeping ? 0.0008f : BOB_FREQ;
+    int bobY = (int)(sinf(millis() * freq) * amp);
     if (bobY != lastBobY) {
         if (lastBobY != -999) eraseChar(cx, cy, lastBobY);
         drawChar(cx, cy, bobY);
+        if (sleeping) drawSleepZ(cx, cy, bobY); // ボックス内に描くので次回 erase で消える
         lastBobY = bobY;
     }
 }

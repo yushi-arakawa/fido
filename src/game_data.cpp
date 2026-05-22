@@ -54,6 +54,11 @@ void saveAll(const Pet& pet, const Inventory& inv) {
         snprintf(key, sizeof(key), "it%d", i);
         p.putBool(key, inv.owned[i]);
     }
+    // 生死/記録まわり (Inventory のコメント参照)。
+    p.putUChar ("crit",  inv.critStreak);
+    p.putUShort("reb",   inv.rebirths);
+    p.putUChar ("bAge",  inv.bestAge);
+    p.putUShort("bBond", inv.bestBond);
     p.end();
 }
 
@@ -73,6 +78,10 @@ void loadAll(Pet& pet, Inventory& inv) {
         snprintf(key, sizeof(key), "it%d", i);
         inv.owned[i] = p.getBool(key, false);
     }
+    inv.critStreak = p.getUChar ("crit",  0);
+    inv.rebirths   = p.getUShort("reb",   0);
+    inv.bestAge    = p.getUChar ("bAge",  0);
+    inv.bestBond   = p.getUShort("bBond", 0);
     p.end();
     pet.mood = pet.calcMood();
 }
