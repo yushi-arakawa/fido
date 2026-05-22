@@ -17,7 +17,9 @@ struct Pet {
     PetMood mood;       // 上記から算出される派生値
 
     // 1tick (30秒) 進める。main.cpp の lastTick タイマーから呼ばれる。
-    void tick();
+    // night=true (夜サイクル) のときは就寝中とみなし、燃料消費を半減し
+    // 士気を減らさない。危機的でなければ mood を Sleepy にする。
+    void tick(bool night = false);
 
     // hunger/happiness/health から mood を決定する純粋関数。
     PetMood calcMood() const;

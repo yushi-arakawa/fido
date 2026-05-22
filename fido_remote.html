@@ -14,8 +14,9 @@
     Web Serial API は Chrome系ブラウザ専用 (Firefox/Safari 非対応)。
 
   DEBUG セクション:
-    ステータス (hunger/happiness/health/age) を直接書き換えるデバッグ用 UI。
+    値設定 (hunger/happiness/health/age/coins/bond) を直接書き換えるデバッグ UI。
     "<文字><数値>\n" の行を送ると M5Stack 側が該当値を設定する。
+    アクション (Night/Day/Auto/Event/Die) は語句 + 改行を送って新機能を即検証する。
 -->
 
 <html lang="ja">
@@ -70,6 +71,10 @@
     background:#02080f; color:#bdf7c0; border:1px solid #2a3a55; border-radius:6px;
   }
   .dbg-set { flex:0 0 54px; padding:6px 0; font-size:12px; }
+  .act-row { display:flex; gap:8px; }
+  .act-btn { flex:1; padding:9px 4px; font-size:12px; }
+  .act-danger { border-color:#7a3550; background:#2a1320; color:#f7bdc8; }
+  .act-danger:hover:not(:disabled) { background:#3d1c2e; }
 </style>
 </head>
 <body>
@@ -117,6 +122,27 @@
         <input type="number" id="dbg-g" min="0" max="255" value="0" disabled>
         <button class="dbg-set" data-field="g" disabled>Set</button>
       </div>
+      <div class="dbg-row">
+        <label>Coins</label>
+        <input type="number" id="dbg-m" min="0" max="9999" value="100" disabled>
+        <button class="dbg-set" data-field="m" disabled>Set</button>
+      </div>
+      <div class="dbg-row">
+        <label>Bond 絆</label>
+        <input type="number" id="dbg-k" min="0" max="1000" value="0" disabled>
+        <button class="dbg-set" data-field="k" disabled>Set</button>
+      </div>
+
+      <div class="debug-title">ACTION — 新機能の即検証</div>
+      <div class="act-row">
+        <button class="act-btn" data-act="night" disabled>🌙 Night固定</button>
+        <button class="act-btn" data-act="sun"   disabled>☀ Day固定</button>
+        <button class="act-btn" data-act="free"  disabled>🔄 Auto</button>
+      </div>
+      <div class="act-row">
+        <button class="act-btn" data-act="event" disabled>☄ Event発生</button>
+        <button class="act-btn act-danger" data-act="die" disabled>💀 Die→転生</button>
+      </div>
     </div>
 
     <div class="note">
@@ -143,8 +169,11 @@ const $ = (id) => document.getElementById(id);
 const dot = $('dot'), statusText = $('statusText'), log = $('log');
 const connectBtn = $('connectBtn');
 const cmdButtons = [...document.querySelectorAll('.btn')];
-// DEBUG セクションのコントロール (接続中のみ有効化する)
-const dbgControls = [...document.querySelectorAll('.dbg-set, .debug input')];
+// DEBUG / ACTION セクションのコントロール (接続中のみ有効化する)
+const dbgControls = [...document.querySelectorAll('.dbg-set, .act-btn, .debug input')];
+
+// 値設定フィールドごとの上限 (クランプ用)。M5Stack 側でも再クランプされる。
+const DBG_MAX = { h:100, p:100, s:100, g:255, m:9999, k:1000 };
 
 function logLine(text) {
   log.textContent = (log.textContent + text).slice(-4000);
@@ -189,10 +218,15 @@ async function sendDebug(field) {
   const input = $('dbg-' + field);
   let v = parseInt(input.value, 10);
   if (isNaN(v)) { logLine('\n[DEBUG] 数値を入力してください'); return; }
-  const max = field === 'g' ? 255 : 100;
+  const max = DBG_MAX[field] ?? 100;
   v = Math.max(0, Math.min(max, v));
   input.value = v; // クランプ後の値に揃える
   if (await sendRaw(field + v + '\n')) logLine('\n[DEBUG] 送信: ' + field + v);
+}
+
+// ─── アクションコマンド送信 ('<語句>\n') ───────────────────────────────
+async function sendAction(word) {
+  if (await sendRaw(word + '\n')) logLine('\n[ACT] 送信: ' + word);
 }
 
 function flash(cmd) {
@@ -256,6 +290,8 @@ connectBtn.addEventListener('click', () => port ? disconnect() : connect());
 cmdButtons.forEach(b => b.addEventListener('click', () => sendCmd(b.dataset.cmd)));
 document.querySelectorAll('.dbg-set').forEach(b =>
   b.addEventListener('click', () => sendDebug(b.dataset.field)));
+document.querySelectorAll('.act-btn').forEach(b =>
+  b.addEventListener('click', () => sendAction(b.dataset.act)));
 // 数値入力欄で Enter を押しても送信できるようにする
 document.querySelectorAll('.debug input').forEach(inp =>
   inp.addEventListener('keydown', (e) => {

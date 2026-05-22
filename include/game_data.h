@@ -23,11 +23,22 @@ extern const ItemDef ITEM_DEFS[ITEM_COUNT];
 // プレイヤーが持つ可変データ。NVS namespace "fido" に保存される。
 struct Inventory {
     uint16_t coins;       // 所持コイン (ミニゲーム報酬で増加)
-    uint16_t bond;        // 絆レベル 0-1000 (200刻みで 5★ 評価)
+    uint16_t bond;        // 絆レベル 0-1000 (200刻みで 5★ 評価)。転生でリセット。
     // owned[14]: 固定サイズで宣言 (ITEM_COUNT を増やしても旧 NVS が残るよう
     // キー "it0".."it13" を安定させるため)。新アイテム追加時はこの配列の
     // サイズも合わせて広げ、新規キー "it14".."" を追加すること。
     bool     owned[14];
+
+    // ─── 生死/転生まわり (world.cpp + main.cpp が更新) ────────────────────
+    // critStreak: health==0 が連続した tick 数。CRIT_LIMIT 到達で「離脱」(死)。
+    //   電源 OFF で放置が帳消しにならないよう NVS に永続化する。
+    // 以下3つは「世代をまたいで残る記録」。転生してもリセットしない。
+    //   rebirths: 看取った世代数 (= 転生回数)。
+    //   bestAge / bestBond: 歴代最高の到達 Day / 絆。
+    uint8_t  critStreak;
+    uint16_t rebirths;
+    uint8_t  bestAge;
+    uint16_t bestBond;
 };
 
 // ─── 永続化 API ─────────────────────────────────────────────────────────

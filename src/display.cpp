@@ -1,6 +1,7 @@
 #include "display.h"
 #include "space_ui.h"
 #include "nasa_gacha.h"
+#include "world.h"
 #include <M5Stack.h>
 
 // ─── 画面レイアウト定数 ──────────────────────────────────────────────────
@@ -88,6 +89,16 @@ static const char* advisorMsg(const Pet& pet) {
         return "All systems nominal!";
     if (pet.happiness > 70) return "Happy and exploring!";
     return "Systems stable.";
+}
+
+// ─── 夜サイクルの三日月インジケータ (Main 画面右上) ────────────────────
+// キャラの描画ボックス (中心 160, 横幅128 → x 96..224) の外側 (右上) に置く
+// ので、charAnimUpdate のスプライト再描画と干渉しない。
+// 三日月は明るい円を背景色の円で削って作る。y<80 の背景は 0x0000 (黒) なので
+// SM_BG で削れば継ぎ目が出ない。fullRedraw 時に再描画される (昼は描かない)。
+static void drawNightMoon() {
+    M5.Lcd.fillCircle(300, 20, 10, SM_LIGHT);
+    M5.Lcd.fillCircle(305, 15,  9, SM_BG);
 }
 
 // ─── Act 画面のコンテンツ部分 (背景には触れない) ───────────────────────
@@ -325,6 +336,7 @@ void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, const NasaCa
     switch (mode) {
         case UIMode::Main:
             displayMessage("");
+            if (worldIsNight()) drawNightMoon(); // 夜は右上に三日月
             break;
         case UIMode::Act:
             displayActContent(sel);

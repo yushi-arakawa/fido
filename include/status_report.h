@@ -12,3 +12,8 @@ void showSettings(Pet& pet, Inventory& inv);
 // confirmLabel には "[A] Confirm" のように A ボタンの動作を表示する。
 // line2 が NULL or 空文字なら 1 行だけ表示。
 bool showConfirmDialog(const char* line1, const char* line2, const char* confirmLabel);
+
+// ペット「離脱」(死) 時の追悼画面。今生の到達 Day / 絆と歴代記録を表示し、
+// いずれかのボタンが押されるまでブロックする。表示前に main 側で記録
+// (bestAge/bestBond/rebirths) を更新しておくこと。転生処理は呼び出し側が行う。
+void showMemorial(const Pet& pet, const Inventory& inv);

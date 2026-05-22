@@ -13,17 +13,27 @@ PetMood Pet::calcMood() const {
 
 // 30秒ごとの自動減衰。main.cpp の loop() から TICK_MS 経過ごとに呼ばれる。
 // 値の変化はその場で saveAll() により NVS に書き戻されることに注意 (game_data.cpp)。
-void Pet::tick() {
+void Pet::tick(bool night) {
     // age は 8bit カンスト (255)。stageForAge() は 80+ を Elder として扱うので
     // カンスト後はずっと Elder のまま動作し続ける。
     if (age < 255) age++;
 
-    // 飽和減算 (アンダーフロー防止)
-    if (hunger    > 0)  hunger    -= 2;
-    if (happiness > 0)  happiness -= 1;
+    // 燃料消費。夜 (就寝中) は代謝が落ちる想定で半減 (-1)、昼は -2。
+    // hungerDrain 未満なら 0 にクランプ (アンダーフロー = 255化を防ぐ。
+    // アイテムで hunger が奇数になると旧 `if(>0) -=2` は 1→255 とバグり得た)。
+    uint8_t hungerDrain = night ? 1 : 2;
+    hunger = (hunger > hungerDrain) ? (hunger - hungerDrain) : 0;
+
+    // 士気は昼のみ自然減衰。夜はぐっすり眠っているので減らさない。
+    if (!night && happiness > 0) happiness -= 1;
 
     // 空腹が深刻なら体力も削れる仕様。連鎖的に Sick mood へ移行する仕掛け。
     if (hunger < 20)    health    = max(0, (int)health - 1);
 
     mood = calcMood();
+
+    // 夜かつ危機的でない (Happy/Neutral) なら「眠っている」表現に上書き。
+    // Hungry/Sick は夜でも優先して見せる (放置に気付けるように)。
+    if (night && (mood == PetMood::Happy || mood == PetMood::Neutral))
+        mood = PetMood::Sleepy;
 }
