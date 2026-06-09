@@ -6,12 +6,17 @@
     1. M5Stack を USB で PC に接続する
     2. このファイルを Chrome または Edge で開く (ダブルクリックで可)
     3. [接続] を押し、ポップアップで M5Stack の COM ポートを選ぶ
-    4. 画面の A / B / C ボタンをクリック、またはキーボードの A/B/C キーを押す
+    4. 実機を模した A / B / C ボタンをクリック、またはキーボードの A/B/C キーを押す
 
   仕組み:
     Web Serial API でシリアル(115200 baud)に 'a'/'b'/'c' の 1 文字を送るだけ。
     M5Stack 側 (src/remote.cpp) がこれを物理ボタン押下として処理する。
     Web Serial API は Chrome系ブラウザ専用 (Firefox/Safari 非対応)。
+
+  見た目:
+    M5Stack Basic 実機に寄せたデザイン。グレー筐体 + 黒フロントパネル + LCD 画面
+    (ゲーム同様のモノクロ宇宙テーマ) + その下に A/B/C 物理ボタン + M5Stack ロゴ。
+    LCD のボトムメニューが各ボタンの現在の役割 (画面ごとのヒント) を表示する。
 
   DEBUG セクション:
     値設定 (hunger/happiness/health/age/coins/bond) を直接書き換えるデバッグ UI。
@@ -25,81 +30,196 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>fido リモコン</title>
 <style>
-  :root { --bg:#000; --hdr:#0a1830; --grey:#7BEF9c; --light:#bdf7c0; --sel:#294560; }
   * { box-sizing:border-box; }
   body {
-    margin:0; min-height:100vh; background:#000; color:#bdf7c0;
-    font-family:"Consolas","Courier New",monospace;
-    display:flex; flex-direction:column; align-items:center; gap:18px; padding:24px;
+    margin:0; min-height:100vh;
+    background:radial-gradient(ellipse at 50% 0%, #14161c 0%, #050506 70%);
+    color:#bdc3cc; font-family:"Consolas","Courier New",monospace;
+    display:flex; flex-direction:column; align-items:center; gap:18px; padding:28px 16px 40px;
   }
-  h1 { font-size:20px; letter-spacing:2px; margin:0; color:#fff; }
+  h1 { font-size:18px; letter-spacing:3px; margin:0; color:#e8eaef; font-weight:600; }
+
+  /* ─── M5Stack Basic 筐体 (グレーのプラスチックボディ) ─────────────── */
+  .m5 {
+    width:340px;
+    background:linear-gradient(150deg,#55585f 0%,#3a3c42 45%,#2b2d31 100%);
+    border-radius:24px;
+    padding:16px 16px 18px;
+    box-shadow:
+      0 22px 48px rgba(0,0,0,.65),
+      inset 0 1px 0 rgba(255,255,255,.14),
+      inset 0 -3px 8px rgba(0,0,0,.55);
+  }
+  /* 黒いグロッシーなフロントパネル */
+  .m5-face {
+    background:linear-gradient(165deg,#1b1d21 0%,#070708 100%);
+    border-radius:16px;
+    padding:16px 16px 12px;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.9), inset 0 2px 10px rgba(0,0,0,.7);
+  }
+
+  /* ─── LCD 画面 (320×240 = 4:3, ゲームと同じモノクロ宇宙テーマ) ──────── */
+  .m5-screen {
+    aspect-ratio:4 / 3; width:100%;
+    background:#000; border-radius:5px; border:2px solid #0b0b0f;
+    position:relative; overflow:hidden;
+    display:flex; flex-direction:column;
+    box-shadow:inset 0 0 14px rgba(0,0,0,.95), 0 0 0 1px #000, 0 0 14px rgba(80,110,170,.10);
+  }
+  /* 星空 */
+  .m5-screen::before {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background-image:
+      radial-gradient(1px 1px at 18% 28%, rgba(255,255,255,.85), transparent),
+      radial-gradient(1px 1px at 68% 18%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1px 1px at 38% 58%, rgba(255,255,255,.65), transparent),
+      radial-gradient(1px 1px at 84% 66%, rgba(255,255,255,.45), transparent),
+      radial-gradient(1px 1px at 54% 82%, rgba(255,255,255,.55), transparent),
+      radial-gradient(1px 1px at 12% 74%, rgba(255,255,255,.40), transparent),
+      radial-gradient(1px 1px at 90% 38%, rgba(255,255,255,.35), transparent),
+      radial-gradient(1px 1px at 30% 12%, rgba(255,255,255,.30), transparent);
+  }
+  /* 画面上ヘッダ帯 (SM_HDR 相当) */
+  .scr-hdr {
+    position:relative; z-index:1;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:5px 9px; background:rgba(10,14,26,.85);
+    border-bottom:1px solid #1b2433;
+    font-size:11px;
+  }
+  .scr-title { color:#fff; letter-spacing:1px; }
+  .scr-led { display:flex; align-items:center; gap:5px; color:#6f7d8f; font-size:10px; letter-spacing:1px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#5a3a18; box-shadow:inset 0 0 2px #000; }
+  .dot.on { background:#36e07a; box-shadow:0 0 7px #36e07a; }
+  /* 画面中央 — 現在の MODE */
+  .scr-body {
+    position:relative; z-index:1; flex:1;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  }
+  .scr-mode {
+    font-size:30px; letter-spacing:6px; color:#fff; font-weight:600;
+    text-shadow:0 0 12px rgba(140,170,230,.45);
+  }
+  .scr-sub { font-size:10px; letter-spacing:2px; color:#566273; }
+  /* 画面下メニューバー (実機ボトムメニュー = A/B/C の役割) */
+  .scr-menu {
+    position:relative; z-index:1;
+    display:flex; background:rgba(10,14,26,.9); border-top:1px solid #1b2433;
+  }
+  .scr-cell {
+    flex:1; text-align:center; padding:6px 2px; font-size:11px; color:#cdd3dc;
+    border-right:1px solid #1b2433; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .scr-cell:last-child { border-right:none; }
+
+  /* ─── 物理ボタン A / B / C (画面の下) ─────────────────────────────── */
+  .m5-btns { display:flex; margin-top:14px; }
+  .m5-btns .slot { flex:1; display:flex; justify-content:center; }
+  button.btn {
+    width:74px; height:30px; border:none; border-radius:16px; cursor:pointer;
+    font-family:inherit; color:#d6d9de;
+    background:linear-gradient(180deg,#42454b 0%,#1f2024 100%);
+    box-shadow:0 4px 0 #131418, 0 5px 6px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.18);
+    transition:transform .05s, box-shadow .05s, background .05s;
+  }
+  button.btn .key { font-size:15px; font-weight:bold; letter-spacing:1px; }
+  button.btn:hover:not(:disabled) { background:linear-gradient(180deg,#4a4d54 0%,#26282d 100%); }
+  button.btn:active:not(:disabled), button.btn.flash {
+    transform:translateY(3px);
+    box-shadow:0 1px 0 #131418, inset 0 1px 2px rgba(0,0,0,.5);
+    background:linear-gradient(180deg,#26282d 0%,#3a3d43 100%); color:#fff;
+  }
+  button.btn:disabled { opacity:.45; cursor:not-allowed; }
+  /* M5Stack ロゴ刻印 */
+  .m5-logo {
+    text-align:center; margin-top:12px;
+    font-size:11px; letter-spacing:5px; font-weight:700; color:#6c6f76;
+    text-shadow:0 1px 0 rgba(0,0,0,.6);
+  }
+  .m5-logo b { color:#e06a2b; } /* M5 の "5" をブランドのオレンジに */
+
+  /* ─── 接続コントロール ─────────────────────────────────────────── */
+  .conn { display:flex; align-items:center; gap:12px; }
+  #connectBtn {
+    font-family:inherit; cursor:pointer; padding:9px 22px; font-size:14px;
+    border-radius:8px; border:1px solid #3a5070; background:#13243c; color:#bdd3f7;
+  }
+  #connectBtn:hover:not(:disabled) { background:#1d3050; }
+  #connectBtn:disabled { opacity:.4; cursor:not-allowed; }
+  #statusText { font-size:13px; color:#8a93a0; }
+
+  /* ─── コントロールパネル (DEBUG / ACTION / ログ) ───────────────────── */
   .panel {
-    width:360px; background:#06101f; border:1px solid #2a3a55;
-    border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:14px;
+    width:340px; background:#0a0d15; border:1px solid #222a3a;
+    border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:12px;
   }
-  .status { display:flex; align-items:center; gap:8px; font-size:13px; }
-  .dot { width:10px; height:10px; border-radius:50%; background:#553; }
-  .dot.on { background:#5f5; box-shadow:0 0 8px #5f5; }
-  button {
-    font-family:inherit; cursor:pointer; border-radius:8px;
-    border:1px solid #3a5070; background:#13243c; color:#bdf7c0;
+  .panel button {
+    font-family:inherit; cursor:pointer; border-radius:7px;
+    border:1px solid #2f3f5a; background:#15233a; color:#bdc8da;
   }
-  button:hover:not(:disabled) { background:#1d3050; }
-  button:disabled { opacity:.4; cursor:not-allowed; }
-  #connectBtn { padding:10px; font-size:14px; }
-  .btnrow { display:flex; gap:12px; }
-  .btn {
-    flex:1; padding:18px 6px; display:flex; flex-direction:column;
-    align-items:center; gap:6px; font-size:13px; transition:transform .05s;
-  }
-  .btn .key { font-size:26px; font-weight:bold; color:#fff; }
-  .btn .hint { color:#7d93b0; font-size:12px; }
-  .btn:active:not(:disabled), .btn.flash { background:#2a4560; transform:scale(.96); }
-  .log {
-    height:140px; overflow-y:auto; background:#02080f; border:1px solid #1e2c42;
-    border-radius:6px; padding:8px; font-size:11px; color:#6f8aa8;
-    white-space:pre-wrap; word-break:break-all;
-  }
-  .note { font-size:11px; color:#55708e; text-align:center; line-height:1.5; }
-  .debug { border-top:1px solid #2a3a55; padding-top:12px; display:flex;
-           flex-direction:column; gap:8px; }
-  .debug-title { font-size:11px; letter-spacing:1px; color:#7d93b0; }
+  .panel button:hover:not(:disabled) { background:#1d3050; }
+  .panel button:disabled { opacity:.4; cursor:not-allowed; }
+  .debug { display:flex; flex-direction:column; gap:8px; }
+  .debug-title { font-size:11px; letter-spacing:1px; color:#7d8aa0; }
   .dbg-row { display:flex; align-items:center; gap:8px; font-size:12px; }
-  .dbg-row label { flex:0 0 78px; color:#bdf7c0; }
+  .dbg-row label { flex:0 0 78px; color:#aeb6c4; }
   .dbg-row input {
     flex:1; min-width:0; font-family:inherit; font-size:13px; padding:5px 7px;
-    background:#02080f; color:#bdf7c0; border:1px solid #2a3a55; border-radius:6px;
+    background:#02060d; color:#bdc8da; border:1px solid #2a3550; border-radius:6px;
   }
   .dbg-set { flex:0 0 54px; padding:6px 0; font-size:12px; }
   .act-row { display:flex; gap:8px; }
   .act-btn { flex:1; padding:9px 4px; font-size:12px; }
   .act-danger { border-color:#7a3550; background:#2a1320; color:#f7bdc8; }
   .act-danger:hover:not(:disabled) { background:#3d1c2e; }
+  .log {
+    height:130px; overflow-y:auto; background:#02060d; border:1px solid #1c2638;
+    border-radius:6px; padding:8px; font-size:11px; color:#6f8aa8;
+    white-space:pre-wrap; word-break:break-all;
+  }
+  .note { font-size:11px; color:#55657e; text-align:center; line-height:1.5; }
 </style>
 </head>
 <body>
-  <h1>🛰  fido リモコン</h1>
-  <div class="panel">
-    <div class="status">
-      <span class="dot" id="dot"></span>
-      <span id="statusText">未接続</span>
+  <h1>🛰 fido リモコン</h1>
+
+  <!-- ─── M5Stack Basic 実機を模したデバイス ───────────────────────── -->
+  <div class="m5">
+    <div class="m5-face">
+      <div class="m5-screen">
+        <div class="scr-hdr">
+          <span class="scr-title">🛰 fido</span>
+          <span class="scr-led"><span class="dot" id="dot"></span><span id="screenConn">OFFLINE</span></span>
+        </div>
+        <div class="scr-body">
+          <span class="scr-mode" id="screenMode">MAIN</span>
+          <span class="scr-sub">M5Stack Basic</span>
+        </div>
+        <div class="scr-menu">
+          <span class="scr-cell" id="hintA">Gacha</span>
+          <span class="scr-cell" id="hintB">Talk</span>
+          <span class="scr-cell" id="hintC">→ Act</span>
+        </div>
+      </div>
+
+      <div class="m5-btns">
+        <div class="slot"><button class="btn" data-cmd="a" disabled><span class="key">A</span></button></div>
+        <div class="slot"><button class="btn" data-cmd="b" disabled><span class="key">B</span></button></div>
+        <div class="slot"><button class="btn" data-cmd="c" disabled><span class="key">C</span></button></div>
+      </div>
+
+      <div class="m5-logo">M<b>5</b>STACK</div>
     </div>
+  </div>
+
+  <!-- ─── 接続コントロール ─────────────────────────────────────────── -->
+  <div class="conn">
     <button id="connectBtn">接続</button>
+    <span id="statusText">未接続</span>
+  </div>
 
-    <div class="btnrow">
-      <button class="btn" data-cmd="a" disabled>
-        <span class="key">A</span><span class="hint" id="hintA">Gacha</span>
-      </button>
-      <button class="btn" data-cmd="b" disabled>
-        <span class="key">B</span><span class="hint" id="hintB">Talk</span>
-      </button>
-      <button class="btn" data-cmd="c" disabled>
-        <span class="key">C</span><span class="hint" id="hintC">→ Act</span>
-      </button>
-    </div>
-
-    <div class="log" id="log">シリアルログ...</div>
-
+  <!-- ─── コントロールパネル ───────────────────────────────────────── -->
+  <div class="panel">
     <div class="debug">
       <div class="debug-title">DEBUG — ステータス直接設定</div>
       <div class="dbg-row">
@@ -145,6 +265,8 @@
       </div>
     </div>
 
+    <div class="log" id="log">シリアルログ...</div>
+
     <div class="note">
       キーボードの A / B / C キーでも操作できます。<br>
       Chrome または Edge で開いてください。
@@ -154,7 +276,7 @@
 <script>
 // ─── 画面ごとの A/B/C ボタンの意味 (CLAUDE.md の画面構成表より) ──────────
 // M5Stack が起動時/画面切替時に "[MODE] -> Main" 等を送ってくるので、
-// それを拾ってボタンのヒント表示を現在の画面に合わせて更新する。
+// それを拾って画面下メニュー (ボタンの役割) を現在の画面に合わせて更新する。
 const HINTS = {
   Main: { a:'Gacha',  b:'Talk',   c:'→ Act'  },
   Act:  { a:'Move',   b:'OK',     c:'→ Back' },
@@ -167,6 +289,7 @@ let keepReading = false;
 
 const $ = (id) => document.getElementById(id);
 const dot = $('dot'), statusText = $('statusText'), log = $('log');
+const screenConn = $('screenConn'), screenMode = $('screenMode');
 const connectBtn = $('connectBtn');
 const cmdButtons = [...document.querySelectorAll('.btn')];
 // DEBUG / ACTION セクションのコントロール (接続中のみ有効化する)
@@ -182,6 +305,7 @@ function logLine(text) {
 
 function setConnected(on) {
   dot.classList.toggle('on', on);
+  screenConn.textContent = on ? 'LIVE' : 'OFFLINE';
   statusText.textContent = on ? '接続中 (115200 baud)' : '未接続';
   connectBtn.textContent = on ? '切断' : '接続';
   cmdButtons.forEach(b => b.disabled = !on);
@@ -194,6 +318,7 @@ function applyMode(mode) {
   $('hintA').textContent = h.a;
   $('hintB').textContent = h.b;
   $('hintC').textContent = h.c;
+  screenMode.textContent = mode.toUpperCase(); // 画面中央の現在モード表示
 }
 
 // ─── シリアル送信 (生バイト列) ─────────────────────────────────────────
