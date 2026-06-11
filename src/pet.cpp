@@ -11,6 +11,10 @@ PetMood Pet::calcMood() const {
     return PetMood::Neutral;
 }
 
+// デブリ生成確率 (%/tick)。昼は 16tick (8分) あるので 20% なら平均 ~3個/日。
+// JUNK_MAX で打ち止めなので、1日掃除しないとほぼ確実に満杯になる感覚。
+static const int JUNK_CHANCE = 20;
+
 // 30秒ごとの自動減衰。main.cpp の loop() から TICK_MS 経過ごとに呼ばれる。
 // 値の変化はその場で saveAll() により NVS に書き戻されることに注意 (game_data.cpp)。
 void Pet::tick(bool night) {
@@ -29,6 +33,21 @@ void Pet::tick(bool night) {
 
     // 空腹が深刻なら体力も削れる仕様。連鎖的に Sick mood へ移行する仕掛け。
     if (hunger < 20)    health    = max(0, (int)health - 1);
+
+    // デブリ放置ペナルティ: 1個につき士気 -1/tick を上乗せ、2個以上で体力も -1。
+    // 夜は就寝中で気にならない想定 (士気据え置きの昼夜設計に合わせる) なので免除。
+    if (!night && junk > 0) {
+        happiness = max(0, (int)happiness - junk);
+        if (junk >= 2) health = max(0, (int)health - 1);
+    }
+
+    // デブリ生成: 昼かつ卵以外で JUNK_CHANCE%/tick。生成は減衰の後に行うので、
+    // 落ちたばかりのデブリが同 tick でペナルティを与えることはない。
+    // 増えた事実は呼び出し側 (main.cpp) が tick 前後の junk 比較で検知して通知する。
+    if (!night && stageForAge(age) != STAGE_EGG && junk < JUNK_MAX &&
+        (int)random(100) < JUNK_CHANCE) {
+        junk++;
+    }
 
     mood = calcMood();
 

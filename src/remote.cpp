@@ -14,7 +14,7 @@ static bool pendA = false, pendB = false, pendC = false;
 static const uint8_t DBG_LINE_MAX = 12;
 static char    lineBuf[DBG_LINE_MAX];
 static uint8_t lineLen  = 0;
-static char    dbgField = 0;  // 適用待ちフィールド ('h'/'p'/'s'/'g'/'m'/'k')、0=保留なし
+static char    dbgField = 0;  // 適用待ちフィールド ('h'/'p'/'s'/'g'/'m'/'k'/'j')、0=保留なし
 static int     dbgValue = 0;  // 適用待ち数値 (クランプ前)
 static RemoteAction pendAction = RemoteAction::None; // 適用待ちアクション
 
@@ -45,7 +45,8 @@ static void parseDebugLine() {
     // (1) 値設定コマンド
     char field = lineBuf[0];
     bool isField = (field == 'h' || field == 'p' || field == 's' ||
-                    field == 'g' || field == 'm' || field == 'k');
+                    field == 'g' || field == 'm' || field == 'k' ||
+                    field == 'j');
     if (isField && lineDigitsFrom(1)) {
         int val = 0;
         for (uint8_t i = 1; i < lineLen; i++) {
@@ -100,6 +101,7 @@ bool remoteDebugApply(Pet& pet, Inventory& inv) {
         case 'g': clamped = constrain(val, 0, 255);  pet.age       = clamped; break;
         case 'm': clamped = constrain(val, 0, 9999); inv.coins     = clamped; break;
         case 'k': clamped = constrain(val, 0, 1000); inv.bond      = clamped; break;
+        case 'j': clamped = constrain(val, 0, (int)JUNK_MAX); pet.junk = clamped; break;
         default:  return false;
     }
     pet.mood = pet.calcMood();             // ステータス変更を mood に反映

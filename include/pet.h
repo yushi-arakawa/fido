@@ -5,6 +5,11 @@
 // UIはこの値を使って文字列・アイコン・アドバイザー文を切り替える。
 enum class PetMood { Happy, Neutral, Hungry, Sleepy, Sick };
 
+// スペースデブリ (宇宙ゴミ = たまごっちの「うんち」相当) の同時存在上限。
+// display.cpp の JUNK_POS 配置数と remote.cpp の j コマンドのクランプ上限が
+// この値に依存する。増やす場合は両方を更新すること。
+static const uint8_t JUNK_MAX = 3;
+
 // 永続化される本体ステータス。NVS namespace "fido" に保存される。
 // ※ 値域や減衰率を変える場合は pet.cpp::tick() と
 //   display.cpp::advisorMsg()/stageName() の閾値も合わせて更新すること。
@@ -15,6 +20,7 @@ struct Pet {
     uint8_t health;     // 0-100 健康度。hunger<20 のとき -1/30s
     uint8_t age;        // 経過 tick 数 (1tick=30s)。255 でカンスト
     PetMood mood;       // 上記から算出される派生値
+    uint8_t junk;       // 0-JUNK_MAX 散らかったデブリ数。Act の Clean で 0 に戻す
 
     // 1tick (30秒) 進める。main.cpp の lastTick タイマーから呼ばれる。
     // night=true (夜サイクル) のときは就寝中とみなし、燃料消費を半減し

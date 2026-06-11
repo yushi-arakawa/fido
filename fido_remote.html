@@ -19,7 +19,7 @@
     LCD のボトムメニューが各ボタンの現在の役割 (画面ごとのヒント) を表示する。
 
   DEBUG セクション:
-    値設定 (hunger/happiness/health/age/coins/bond) を直接書き換えるデバッグ UI。
+    値設定 (hunger/happiness/health/age/coins/bond/debris) を直接書き換えるデバッグ UI。
     "<文字><数値>\n" の行を送ると M5Stack 側が該当値を設定する。
     アクション (Night/Day/Auto/Event/Die) は語句 + 改行を送って新機能を即検証する。
 -->
@@ -28,7 +28,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>fido リモコン</title>
+<title>fido remote</title>
 <style>
   * { box-sizing:border-box; }
   body {
@@ -38,6 +38,13 @@
     display:flex; flex-direction:column; align-items:center; gap:18px; padding:28px 16px 40px;
   }
   h1 { font-size:18px; letter-spacing:3px; margin:0; color:#e8eaef; font-weight:600; }
+
+  /* ─── 左右2カラム配置 (接続ボタンを境に左: 実機 / 右: コントロール) ─── */
+  .stage {
+    display:flex; align-items:flex-start; justify-content:center;
+    gap:24px; flex-wrap:wrap;
+  }
+  .col-left { display:flex; flex-direction:column; align-items:center; gap:16px; }
 
   /* ─── M5Stack Basic 筐体 (グレーのプラスチックボディ) ─────────────── */
   .m5 {
@@ -181,14 +188,18 @@
 </style>
 </head>
 <body>
-  <h1>🛰 fido リモコン</h1>
+  <h1>🐈 fido remote</h1>
+
+  <div class="stage">
+  <!-- ─── 左カラム: M5Stack 実機 + 接続ボタン ───────────────────────── -->
+  <div class="col-left">
 
   <!-- ─── M5Stack Basic 実機を模したデバイス ───────────────────────── -->
   <div class="m5">
     <div class="m5-face">
       <div class="m5-screen">
         <div class="scr-hdr">
-          <span class="scr-title">🛰 fido</span>
+          <span class="scr-title">🐈 fido</span>
           <span class="scr-led"><span class="dot" id="dot"></span><span id="screenConn">OFFLINE</span></span>
         </div>
         <div class="scr-body">
@@ -212,13 +223,15 @@
     </div>
   </div>
 
-  <!-- ─── 接続コントロール ─────────────────────────────────────────── -->
+  <!-- ─── 接続コントロール (左右の境目) ─────────────────────────────── -->
   <div class="conn">
     <button id="connectBtn">接続</button>
     <span id="statusText">未接続</span>
   </div>
 
-  <!-- ─── コントロールパネル ───────────────────────────────────────── -->
+  </div><!-- /.col-left -->
+
+  <!-- ─── 右カラム: コントロールパネル ──────────────────────────────── -->
   <div class="panel">
     <div class="debug">
       <div class="debug-title">DEBUG — ステータス直接設定</div>
@@ -252,6 +265,11 @@
         <input type="number" id="dbg-k" min="0" max="1000" value="0" disabled>
         <button class="dbg-set" data-field="k" disabled>Set</button>
       </div>
+      <div class="dbg-row">
+        <label>Debris</label>
+        <input type="number" id="dbg-j" min="0" max="3" value="0" disabled>
+        <button class="dbg-set" data-field="j" disabled>Set</button>
+      </div>
 
       <div class="debug-title">ACTION — 新機能の即検証</div>
       <div class="act-row">
@@ -272,6 +290,8 @@
       Chrome または Edge で開いてください。
     </div>
   </div>
+
+  </div><!-- /.stage -->
 
 <script>
 // ─── 画面ごとの A/B/C ボタンの意味 (CLAUDE.md の画面構成表より) ──────────
@@ -296,7 +316,7 @@ const cmdButtons = [...document.querySelectorAll('.btn')];
 const dbgControls = [...document.querySelectorAll('.dbg-set, .act-btn, .debug input')];
 
 // 値設定フィールドごとの上限 (クランプ用)。M5Stack 側でも再クランプされる。
-const DBG_MAX = { h:100, p:100, s:100, g:255, m:9999, k:1000 };
+const DBG_MAX = { h:100, p:100, s:100, g:255, m:9999, k:1000, j:3 };
 
 function logLine(text) {
   log.textContent = (log.textContent + text).slice(-4000);

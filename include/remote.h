@@ -22,6 +22,7 @@
 //   g<n>  age       0-255
 //   m<n>  coins     0-9999  (money)
 //   k<n>  bond      0-1000  (kizuna/絆)
+//   j<n>  junk      0-3     (スペースデブリ数)
 // a/b/c は 1 文字で即時に処理 (改行不要)、デバッグコマンドは改行で確定。
 // remoteSync() が行を解析して保留し、remoteDebugApply() が pet/inv に反映する。
 //
