@@ -45,6 +45,7 @@ void saveAll(const Pet& pet, const Inventory& inv) {
     p.putUChar("happy",  pet.happiness);
     p.putUChar("health", pet.health);
     p.putUChar("age",    pet.age);
+    p.putUChar("junk",   pet.junk);
     p.putUShort("coins", inv.coins);
     p.putUShort("bond",  inv.bond);
     // アイテム所有フラグを "it0".."it13" のキーで保存。
@@ -71,6 +72,7 @@ void loadAll(Pet& pet, Inventory& inv) {
     pet.happiness = p.getUChar("happy",  80);
     pet.health    = p.getUChar("health", 100);
     pet.age       = p.getUChar("age",    0);
+    pet.junk      = min(p.getUChar("junk", 0), JUNK_MAX);
     inv.coins     = p.getUShort("coins", 0);
     inv.bond      = p.getUShort("bond",  0);
     for (int i = 0; i < ITEM_COUNT; i++) {
