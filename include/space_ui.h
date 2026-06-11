@@ -28,12 +28,27 @@ inline void spDrawBackground() {
     M5.Lcd.fillRect(0, 210, 320,  30, 0x08C5);
 }
 
+// ─── 星雲 (ダストクラウド) 判定 ────────────────────────────────────────
+// 2つの楕円領域の内側だけ、星空ハッシュの別ウィンドウで超低輝度の塵を撒く。
+// 完全に座標決定論なので部分再描画 (spDrawBackgroundRect) でも継ぎ目が出ない。
+// 楕円A は Main 画面キャラの左後方、B は右側パネル裏 (Main でのみほぼ見える)。
+// 判定式: dx^2*ry^2 + dy^2*rx^2 <= rx^2*ry^2 (整数のみ、long で桁あふれ回避)
+inline bool spInNebula(int px, int py) {
+    long dxA = px - 55,  dyA = py - 50;   // A: rx=52, ry=30
+    if (dxA * dxA * 900 + dyA * dyA * 2704 <= 2433600L) return true;
+    long dxB = px - 282, dyB = py - 95;   // B: rx=38, ry=46
+    if (dxB * dxB * 2116 + dyB * dyB * 1444 <= 3055504L) return true;
+    return false;
+}
+
 // ─── 星空 (低密度・モノクロ・決定論) ───────────────────────────────────
 // 座標 (px,py) からハッシュで明るさを決める疑似乱数描画。
 // 同じ座標は常に同じ星になるので、後で部分再描画しても継ぎ目が出ない。
 // 数値の意味:
 //   - 0x1FF マスクで 1/512 → 実際は < 3 で 3/512 ≈ 0.6% 密度
 //   - フルスクリーン (320x240=76800) で約 460 個の星
+// 星にならなかったピクセルのうち星雲領域内は、低確率 (≈4.7%) で塵として
+// SM_DIV/SM_HDR の超低輝度ドットを置き、淡いガス雲のテクスチャを作る。
 // drawPixel ループは遅いので、静的画面では一度しか呼ばないこと。
 inline void spDrawStarfield(int x, int y, int w, int h) {
     for (int px = x; px < x + w; px++) {
@@ -46,6 +61,9 @@ inline void spDrawStarfield(int x, int y, int w, int h) {
                              br < 160 ? SM_GREY  :
                              br < 230 ? SM_LIGHT : SM_WHITE;
                 M5.Lcd.drawPixel(px, py, c);
+            } else if ((v & 0x7F) < 6 && spInNebula(px, py)) {
+                // 6/128 のうち 1/4 をやや明るい塵にしてムラを出す
+                M5.Lcd.drawPixel(px, py, (v & 0x180) == 0 ? SM_DIV : SM_HDR);
             }
         }
     }

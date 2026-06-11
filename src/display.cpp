@@ -81,6 +81,7 @@ static const char* moodLabel(PetMood m) {
 static const char* advisorMsg(const Pet& pet) {
     if (pet.health    < 30) return "Hull breach! Help me!";
     if (pet.hunger    < 20) return "Fuel critical. Feed me!";
+    if (pet.junk  >= 2)     return "Debris field! Clean up!";
     if (pet.hunger    < 40) return "Running low on fuel...";
     if (pet.happiness < 25) return "Crew morale very low.";
     if (pet.happiness < 50) return "Need recreation time.";
@@ -99,14 +100,73 @@ static const char* advisorMsg(const Pet& pet) {
 static void drawNightMoon() {
     M5.Lcd.fillCircle(300, 20, 10, SM_LIGHT);
     M5.Lcd.fillCircle(305, 15,  9, SM_BG);
+    M5.Lcd.drawPixel(296, 23, SM_GREY);  // クレーターの影
+    M5.Lcd.drawPixel(293, 18, SM_GREY);
+    M5.Lcd.drawPixel(286, 11, SM_DIM);   // 周囲に淡い光点 (ハロー)
+    M5.Lcd.drawPixel(288, 29, SM_DIM);
+    M5.Lcd.drawPixel(311, 31, SM_DIM);
+}
+
+// ─── 環状惑星 (Main 画面左上の常設デコ) ────────────────────────────────
+// 遠景に浮かぶ小さな土星型の惑星。キャラボックス (x>=96) の外側なので
+// アニメと干渉しない。環は点列の楕円 (rx=13, ry=4.5) を手描きし、本体の
+// 「後ろ側」(上半分かつ本体の幅の内側) を描かないことで奥行きを出す。
+static void drawRingedPlanet() {
+    const int px = 26, py = 24;
+    M5.Lcd.fillCircle(px, py, 7, SM_DIM);
+    M5.Lcd.fillCircle(px - 2, py - 2, 3, SM_GREY); // 受光面ハイライト
+    for (int a = 0; a < 360; a += 6) {
+        float rad = a * 0.0174533f;
+        int ex = px + (int)(13.0f * cosf(rad));
+        int ey = py + (int)(4.5f * sinf(rad));
+        if (ey > py || ex < px - 8 || ex > px + 8)
+            M5.Lcd.drawPixel(ex, ey, SM_GREY);
+    }
+}
+
+// Main 画面の装飾一式 (惑星 / 夜の三日月 / デブリ) をまとめて描く。
+// displayInit(Main) のほか、イベント FX が背景を塗り戻した後の復元にも使う。
+void displayMainDeco(uint8_t junk, bool night) {
+    drawRingedPlanet();
+    if (night) drawNightMoon();
+    displayJunk(junk);
+}
+
+// ─── スペースデブリ (宇宙ゴミ) アイコン (Main 画面のみ) ────────────────
+// たまごっちの「うんち」に相当するお世話対象。配置はキャラ描画ボックス
+// (中心 160,80 / 128×128 + ボブ±3 → x 96..224, y 13..147) の完全に外側に
+// 取ってあるので、charAnimUpdate の erase/再描画と干渉しない。
+// 夜の三日月 (300,20 r10) とも重ならない位置にすること。
+// 消去は専用処理を持たない: Clean もデバッグ j コマンドも fullRedraw 経由で
+// 画面ごと描き直されるため、描く側だけ用意すれば足りる。
+static const struct { int x, y; } JUNK_POS[JUNK_MAX] = {
+    {  58, 116 },   // 左下 (キャラの足元寄り)
+    { 256, 122 },   // 右下
+    {  42,  60 },   // 左上 (3個目で「散らかってる」感を出す)
+};
+
+// ゴツゴツした破片の塊 (~15×10px) を図形プリミティブで描く。
+// スプライトを増やすとフラッシュを食うので手描きで済ませている。
+static void drawJunkIcon(int x, int y) {
+    M5.Lcd.fillTriangle(x,     y + 8, x + 5,  y,     x + 11, y + 7, SM_GREY);
+    M5.Lcd.fillTriangle(x + 2, y + 9, x + 11, y + 7, x + 7,  y + 3, SM_DIM);
+    M5.Lcd.drawPixel(x + 4,  y + 2, SM_LIGHT); // ハイライト
+    M5.Lcd.drawPixel(x + 14, y + 3, SM_DIM);   // 漂う小破片
+    M5.Lcd.drawPixel(x - 3,  y + 6, SM_DIM);
+}
+
+void displayJunk(uint8_t junk) {
+    for (int i = 0; i < junk && i < JUNK_MAX; i++)
+        drawJunkIcon(JUNK_POS[i].x, JUNK_POS[i].y);
 }
 
 // ─── Act 画面のコンテンツ部分 (背景には触れない) ───────────────────────
 // 左パネル (アクション一覧) と右パネル (Fido tips) を分割描画。
 // 行ハイライトは selected のみ SM_SEL 色 + 左 3px のアクセントバー。
 // アクション項目を追加する時は ACT_LABELS と main.cpp::doAct の case を
-// 同じインデックスで更新すること。配列要素数 4 はループの `% 4` にも依存。
-static const char* ACT_LABELS[] = { "Feed", "Play", "Game", "Shop" };
+// 同じインデックスで更新すること。配列要素数 5 は main.cpp の `% 5` にも依存。
+// 行高 26px × 5行 = 130px で 22..152 に収まる (MSG_Y=155 が下限)。
+static const char* ACT_LABELS[] = { "Feed", "Play", "Clean", "Game", "Shop" };
 
 void displayActContent(int sel) {
     Serial.printf("[ACT] selected: %s\n", ACT_LABELS[sel]);
@@ -118,15 +178,15 @@ void displayActContent(int sel) {
     M5.Lcd.setCursor(SX, 4);
     M5.Lcd.print("Actions");
 
-    for (int i = 0; i < 4; i++) {
-        int y = 22 + i * 33;
+    for (int i = 0; i < 5; i++) {
+        int y = 22 + i * 26;
         bool active = (i == sel);
         uint16_t bg = active ? SM_SEL : SM_BG;
-        M5.Lcd.fillRect(0, y, PDIV, 33, bg);
-        if (active) M5.Lcd.fillRect(0, y, 3, 33, SM_WHITE);
+        M5.Lcd.fillRect(0, y, PDIV, 26, bg);
+        if (active) M5.Lcd.fillRect(0, y, 3, 26, SM_WHITE);
         M5.Lcd.setTextSize(2);
         M5.Lcd.setTextColor(active ? SM_WHITE : SM_GREY, bg);
-        M5.Lcd.setCursor(SX + 4, y + 8);
+        M5.Lcd.setCursor(SX + 4, y + 5);
         M5.Lcd.printf("%s %s", active ? ">" : " ", ACT_LABELS[i]);
     }
     spCornerFrame(0, 0, PDIV, MSG_Y);
@@ -162,6 +222,19 @@ void displayActContent(int sel) {
     M5.Lcd.setCursor(RX, 114);
     M5.Lcd.print("v2.4.1  classified");
 
+    // パネル下部の空きにミニ星図 (星座 "Fido Minor") を描いて宇宙観を足す。
+    // 点を SM_DIV の細線で結び、星本体は 2x2 + 中心 1px の白で小さく光らせる。
+    static const struct { int16_t x, y; } CONST_PTS[6] = {
+        {178, 144}, {198, 133}, {220, 139}, {243, 129}, {266, 145}, {291, 134},
+    };
+    for (int i = 0; i < 5; i++)
+        M5.Lcd.drawLine(CONST_PTS[i].x, CONST_PTS[i].y,
+                        CONST_PTS[i + 1].x, CONST_PTS[i + 1].y, SM_DIV);
+    for (int i = 0; i < 6; i++) {
+        M5.Lcd.fillRect(CONST_PTS[i].x - 1, CONST_PTS[i].y - 1, 3, 3, SM_GREY);
+        M5.Lcd.drawPixel(CONST_PTS[i].x, CONST_PTS[i].y, SM_WHITE);
+    }
+
     spCornerFrame(PDIV, 0, RW, MSG_Y);
 }
 
@@ -173,10 +246,10 @@ void displayActContent(int sel) {
 void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& nasa) {
     int owned = 0;
     for (int i = 0; i < ITEM_COUNT; i++) if (inv.owned[i]) owned++;
-    Serial.printf("[BACK] %s [%s] Day%d | Energy:%d Morale:%d Shield:%d | Mood:%s | Bond:%d/1000 $%d Items:%d/%d | %s\n",
+    Serial.printf("[BACK] %s [%s] Day%d | Energy:%d Morale:%d Shield:%d | Mood:%s Junk:%d | Bond:%d/1000 $%d Items:%d/%d | %s\n",
         pet.name.c_str(), stageName(pet.age), pet.age,
         pet.hunger, pet.happiness, pet.health,
-        moodLabel(pet.mood), inv.bond, inv.coins, owned, ITEM_COUNT,
+        moodLabel(pet.mood), pet.junk, inv.bond, inv.coins, owned, ITEM_COUNT,
         advisorMsg(pet));
     M5.Lcd.fillRect(0, 0, 320, MENU_Y, SM_BG);
 
@@ -221,13 +294,17 @@ void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& n
     }
     M5.Lcd.drawFastHLine(0, 114, 320, SM_DIV);
 
-    // Mood + item count
+    // Mood + item count + debris
     M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
     M5.Lcd.setCursor(SX, 120);
     M5.Lcd.print(moodLabel(pet.mood));
     M5.Lcd.setTextColor(SM_GREY, SM_BG);
     M5.Lcd.setCursor(150, 120);
     M5.Lcd.printf("Items: %d/%d", owned, ITEM_COUNT);
+    // デブリ数。2個以上 (体力が削れ始めるライン) は白で警告表示する。
+    M5.Lcd.setTextColor(pet.junk >= 2 ? SM_WHITE : SM_GREY, SM_BG);
+    M5.Lcd.setCursor(250, 120);
+    M5.Lcd.printf("Debris:%d", pet.junk);
     M5.Lcd.drawFastHLine(0, 132, 320, SM_DIV);
 
     // Cargo
@@ -285,15 +362,24 @@ void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& n
 // ─── 画面下のメッセージ BOX ────────────────────────────────────────────
 // Main / Act 画面の y=155..217 を独占する横長エリア。
 // 一時的な通知用なので、Back 画面では使わない (上書きするとステータスが消える)。
+// 文字は端末風のタイプライター表示 (1文字ずつ送出)。長文 (Claude の返答等)
+// は字送りを速めて体感待ちを抑える。ブロッキングだが最長でも ~0.5 秒。
 void displayMessage(const String& msg) {
     Serial.printf("[MSG] %s\n", msg.c_str());
     M5.Lcd.fillRect(1, MSG_Y + 1, 318, MSG_H - 2, SM_HDR);
+    spCornerFrame(0, MSG_Y, 320, MSG_H);
+    if (msg.length() == 0) return; // 空メッセージは枠だけ描いて終了
+
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(SM_LIGHT, SM_HDR);
     M5.Lcd.setCursor(6, MSG_Y + 8);
     M5.Lcd.print("> ");
-    M5.Lcd.println(msg);
-    spCornerFrame(0, MSG_Y, 320, MSG_H);
+    uint8_t wait = msg.length() > 60 ? 2 : 6;
+    for (unsigned int i = 0; i < msg.length(); i++) {
+        M5.Lcd.print(msg[i]); // print の自動折返しは println と同じ挙動
+        delay(wait);
+    }
+    spCornerFrame(0, MSG_Y, 320, MSG_H); // 折返しが左枠に触れた場合の補修
 }
 
 // ─── 最下段ボタンガイド ────────────────────────────────────────────────
@@ -336,7 +422,7 @@ void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, const NasaCa
     switch (mode) {
         case UIMode::Main:
             displayMessage("");
-            if (worldIsNight()) drawNightMoon(); // 夜は右上に三日月
+            displayMainDeco(pet.junk, worldIsNight()); // 惑星 + 夜の三日月 + デブリ
             break;
         case UIMode::Act:
             displayActContent(sel);

@@ -10,6 +10,7 @@
 #include "nasa_gacha.h"
 #include "remote.h"
 #include "world.h"
+#include "fx.h"
 #include <Preferences.h>
 
 // ─── キャラ表示位置 ─────────────────────────────────────────────────────
@@ -30,16 +31,18 @@ static const uint16_t TONE_B      = 659; // E5 — 決定/Talk/OK
 static const uint16_t TONE_C      = 784; // G5 — 画面切替/Close
 static const uint16_t TONE_VOL_ON = 880; // A5 — 音量 ON 切替時のプレビュー
 static const uint16_t TONE_EVENT  = 988; // B5 — 宇宙イベント発生のチャイム
+static const uint16_t TONE_JUNK   = 587; // D5 — デブリ落下の通知 (ボタン音と区別)
+static const uint16_t TONE_CLEAN  = 880; // A5 — 掃除完了 (達成感のある高め)
 static const uint16_t TONE_DUR_MS = 60;  // 既定の鳴動時間
 
 // ─── ゲーム状態 (グローバルだがファイルスコープで局所化) ────────────────
 // 永続データ (pet, inv, nasaCargo) は setup() で NVS から読み込まれる。
 // {} で全フィールドをゼロ初期化 (Inventory.owned は 14要素全て false に)。
-static Pet       pet       = {"Fido", 80, 80, 100, 0, PetMood::Happy};
+static Pet       pet       = {"Fido", 80, 80, 100, 0, PetMood::Happy, 0};
 static Inventory inv       = {};
 static NasaCargo nasaCargo = {};
 static UIMode    uiMode    = UIMode::Main;
-static int       actSel    = 0; // Act 画面で選択中のアクション (0..3)
+static int       actSel    = 0; // Act 画面で選択中のアクション (0..4)
 
 // ─── tick タイマー ──────────────────────────────────────────────────────
 // 30秒ごとに pet.tick() を呼び、ステータスを減衰させて NVS に保存する。
@@ -63,13 +66,15 @@ static const uint8_t CRIT_LIMIT = 6;
 // 続く charAnimUpdate() で必ずスプライトを再描画させるためのもの。
 static void fullRedraw(const String& msg = "") {
     charAnimRedraw();
+    fxAmbientReset(); // 瞬く星/流れ星の描画キャッシュも無効化
     displayInit(uiMode, pet, inv, nasaCargo, actSel);
     if (msg.length() > 0) displayMessage(msg);
 }
 
 // ─── アクション実行 (Act 画面で B ボタンを押した時) ─────────────────────
-// idx は ACT_LABELS の index と一致 (display.cpp 参照): 0=Feed 1=Play 2=Game 3=Shop
-// Feed/Play はその場で完結する軽量アクション (画面遷移なし)。
+// idx は ACT_LABELS の index と一致 (display.cpp 参照):
+//   0=Feed 1=Play 2=Clean 3=Game 4=Shop
+// Feed/Play/Clean はその場で完結する軽量アクション (画面遷移なし)。
 // Game/Shop はサブ画面に入るので、戻ってきた後に fullRedraw() で UI を復旧する。
 static void doAct(int idx) {
     switch (idx) {
@@ -92,14 +97,27 @@ static void doAct(int idx) {
                 displayMessage("Wheee! So fun!");
             }
             break;
-        case 2: { // Game: ミニゲーム選択画面に入り、稼いだコインを加算
+        case 2: // Clean: スペースデブリを一掃。1個につき士気 +3 のおまけ付き
+            if (pet.junk == 0) {
+                displayMessage("All clear! No debris around.");
+            } else {
+                int n = pet.junk;
+                pet.junk      = 0;
+                pet.happiness = min(100, (int)pet.happiness + 3 * n);
+                pet.mood      = pet.calcMood();
+                M5.Speaker.tone(TONE_CLEAN, 90);
+                displayMessage("Swept " + String(n) + " debris into the void!");
+                // アイコンの消去は不要: Main へ戻る時の fullRedraw で消える
+            }
+            break;
+        case 3: { // Game: ミニゲーム選択画面に入り、稼いだコインを加算
             uint16_t earned = runGameMenu();
             inv.coins += earned;
             saveAll(pet, inv);
             fullRedraw("Game over! +" + String(earned) + " coins");
             break;
         }
-        case 3: // Shop: ショップ画面 (中で applyItem→saveAll される)
+        case 4: // Shop: ショップ画面 (中で applyItem→saveAll される)
             runShop(pet, inv);
             saveAll(pet, inv); // 念のため戻り後も保存 (重複コストは無視できる)
             fullRedraw("Thanks for shopping!");
@@ -121,11 +139,12 @@ static void handleDeath() {
     Serial.printf("[DEATH] Day%d bond%d -> generation #%d\n",
                   pet.age, inv.bond, inv.rebirths);
 
+    fxRampTo(0);            // 画面を静かに消灯してから追悼へ (showMemorial が再点灯)
     showMemorial(pet, inv); // ボタンが押されるまでブロック
 
     // 転生。name は固定、ステータスは初期値、絆と危機カウンタはリセット。
     // コイン (inv.coins) と所有アイテム (inv.owned) はそのまま引き継ぐ。
-    pet            = {"Fido", 80, 80, 100, 0, PetMood::Happy};
+    pet            = {"Fido", 80, 80, 100, 0, PetMood::Happy, 0};
     inv.bond       = 0;
     inv.critStreak = 0;
     saveAll(pet, inv);
@@ -159,6 +178,9 @@ void setup() {
 
     // ESP の真乱数で seed → ミニゲームや NASA ガチャの再現性を排除。
     randomSeed(esp_random());
+
+    // バックライトを現在の昼夜サイクルに合わせて初期化 (昼 100 / 夜 45)。
+    fxInitBrightness(worldIsNight());
 
     charAnimPlayStartup();
     fullRedraw("Hello! I'm " + pet.name + "!");
@@ -202,14 +224,21 @@ void loop() {
             break;
         case RemoteAction::SpaceEvent: {
             String m;
-            worldForceEvent(pet, inv, m);
+            WorldEventType t;
+            worldForceEvent(pet, inv, m, t);
             saveAll(pet, inv);
             Serial.printf("[EVENT] (forced) %s\n", m.c_str());
-            M5.Speaker.tone(TONE_EVENT, 120);
             if (uiMode == UIMode::Back) {
+                M5.Speaker.tone(TONE_EVENT, 120);
                 displayBackContent(pet, inv, nasaCargo);
                 displayMenuBar(uiMode, actSel);
             } else {
+                if (uiMode == UIMode::Main) {
+                    fxEvent(t); // 種別別ミニアニメ (効果音込み)
+                    displayMainDeco(pet.junk, worldIsNight()); // FX が消した装飾を復元
+                } else {
+                    M5.Speaker.tone(TONE_EVENT, 120);
+                }
                 displayMessage(m); // Main/Act のメッセージ BOX に表示
             }
             break;
@@ -232,6 +261,7 @@ void loop() {
         const char* tmsg = night ? "Zzz... Fido drifts to sleep." : "Good morning, Fido!";
         Serial.printf("[DAYNIGHT] -> %s\n", night ? "night" : "day");
         fullRedraw(uiMode == UIMode::Back ? "" : tmsg);
+        fxDayNightRamp(night); // バックライトを昼夜の基準輝度へ滑らかに遷移
     }
 
     // ── C: 画面循環 Main → Act → Back → Main ────────────────────────────
@@ -285,7 +315,7 @@ void loop() {
     if (uiMode == UIMode::Act) {
         if (btnA()) {
             M5.Speaker.tone(TONE_A, TONE_DUR_MS);
-            actSel = (actSel + 1) % 4;
+            actSel = (actSel + 1) % 5;
             displayActContent(actSel);
             displayMenuBar(uiMode, actSel);
         }
@@ -309,7 +339,9 @@ void loop() {
     // ── 30秒 tick: 減衰 + 絆増加 + 宇宙イベント + 生死判定 + 保存 ────────
     if (millis() - lastTick >= TICK_MS) {
         lastTick = millis();
+        uint8_t junkBefore = pet.junk;   // tick 内のデブリ生成を増分で検知する
         pet.tick(night);                 // 夜は燃料消費半減・mood=Sleepy
+        bool junkDropped = pet.junk > junkBefore;
         if (inv.bond < 1000) inv.bond++; // 絆は単調増加 (上限 1000 で 5★)
 
         // health==0 の連続 tick を数える (NVS 永続)。CRIT_LIMIT で離脱。
@@ -318,35 +350,53 @@ void loop() {
 
         // ランダム宇宙イベント (卵期は発生しない)。pet/inv を直接書き換える。
         String evMsg;
-        bool ev = worldRollEvent(pet, inv, evMsg);
+        WorldEventType evType;
+        bool ev = worldRollEvent(pet, inv, evMsg, evType);
 
         saveAll(pet, inv);
-        Serial.printf("[TICK] age:%d energy:%d morale:%d shield:%d bond:%d crit:%d%s\n",
+        Serial.printf("[TICK] age:%d energy:%d morale:%d shield:%d bond:%d junk:%d crit:%d%s\n",
             pet.age, pet.hunger, pet.happiness, pet.health, inv.bond,
-            inv.critStreak, night ? " (night)" : "");
+            pet.junk, inv.critStreak, night ? " (night)" : "");
 
         if (inv.critStreak >= CRIT_LIMIT) {
             handleDeath();   // 追悼 → 転生 → fullRedraw (Main)
         } else {
             if (ev) {
                 Serial.printf("[EVENT] %s\n", evMsg.c_str());
-                M5.Speaker.tone(TONE_EVENT, 120);
+                // Main 画面では種別別のミニアニメ (効果音込み) を再生し、
+                // FX が塗り戻した装飾 (惑星/月/デブリ) を復元する。
+                // それ以外の画面では従来どおりチャイムだけ鳴らす。
+                if (uiMode == UIMode::Main) {
+                    fxEvent(evType);
+                    displayMainDeco(pet.junk, night);
+                } else {
+                    M5.Speaker.tone(TONE_EVENT, 120);
+                }
+            }
+            if (junkDropped) {
+                Serial.printf("[JUNK] dropped -> %d\n", pet.junk);
+                M5.Speaker.tone(TONE_JUNK, 80); // お世話コール (たまごっちのピコン)
             }
             // Back 画面では数値が直接見えるので即時再描画。
-            // Main/Act ではイベント時のみメッセージ BOX に通知を出す。
+            // Main ではデブリのアイコンを追加描画 (Act はパネルが覆うので描かない。
+            // 次に Main へ戻る fullRedraw で displayInit が復元描画する)。
+            // メッセージはレアな宇宙イベントを優先し、デブリ通知はその次。
             if (uiMode == UIMode::Back) {
                 displayBackContent(pet, inv, nasaCargo);
                 displayMenuBar(uiMode, actSel);
-            } else if (ev) {
-                displayMessage(evMsg);
+            } else {
+                if (junkDropped && uiMode == UIMode::Main) displayJunk(pet.junk);
+                if      (ev)          displayMessage(evMsg);
+                else if (junkDropped) displayMessage("Oops... Fido shed some debris.");
             }
         }
     }
 
-    // ── キャラのアイドルアニメーション (Main 画面のみ) ──────────────────
-    // 夜は就寝表現 (穏やかな寝息 + zZ)。
+    // ── キャラのアイドルアニメーション + 環境演出 (Main 画面のみ) ────────
+    // 夜は就寝表現 (穏やかな寝息 + zZ)。環境演出は瞬く星と流れ星。
     if (uiMode == UIMode::Main) {
         charAnimUpdate(pet.age, CHAR_CX, CHAR_CY, night);
+        fxAmbientUpdate(night);
     }
 
     delay(16); // ~60fps 上限。バッテリー消費とCPU負荷の妥協点。
