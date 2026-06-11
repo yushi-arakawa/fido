@@ -139,11 +139,40 @@ static void startupBeep(uint16_t freq, uint16_t onMs, uint16_t gapMs) {
     if (gapMs) delay(gapMs);
 }
 
+// ─── ワープ演出 (起動シーケンスの導入) ─────────────────────────────────
+// 中心 (160,120) から星が放射状に加速して流れる ~0.5 秒のハイパースペース風
+// アニメーション。フレーム f での線分を「2フレーム前の線を黒で描き直して
+// 消す → 新frame を描く」差分方式で更新する。終了後に残る最後の2フレーム分
+// は直後の spDrawBackground() が上書きして消すので後始末は不要。
+static void warpLine(int f, int i, uint16_t col) {
+    const int cx = 160, cy = 120;
+    float a  = i * (TWO_PI / 14.0f) + (i % 3) * 0.15f;
+    float r0 = 6.0f + f * 8.0f + (i % 4) * 5.0f;
+    float r1 = r0 + 6.0f + f * 1.5f;
+    M5.Lcd.drawLine(cx + (int)(r0 * cosf(a)), cy + (int)(r0 * sinf(a)),
+                    cx + (int)(r1 * cosf(a)), cy + (int)(r1 * sinf(a)), col);
+}
+
+static void playWarpIntro() {
+    M5.Lcd.fillScreen(SM_BG);
+    for (int f = 0; f < 18; f++) {
+        if (f >= 2)
+            for (int i = 0; i < 14; i++) warpLine(f - 2, i, SM_BG);
+        for (int i = 0; i < 14; i++)
+            warpLine(f, i, f > 13 ? SM_WHITE : (f & 1) ? SM_LIGHT : SM_GREY);
+        M5.Speaker.tone(200 + f * 70); // 上昇ワープ音 (200→1390Hz スイープ)
+        delay(28);
+    }
+    M5.Speaker.mute();
+}
+
 // ─── 起動アニメーション ───────────────────────────────────────────────
-// setup() から1回だけ呼ばれるブロッキング演出 (~2秒)。
-// "FIDO" の各文字を C メジャーの上昇アルペジオに合わせて表示する。
+// setup() から1回だけ呼ばれるブロッキング演出 (~2.5秒)。
+// ワープ突入 → 星空展開 → "FIDO" の各文字を C メジャーの上昇アルペジオに
+// 合わせて表示 → サブタイトルのタイプライター表示。
 // 終了後は呼び出し元の fullRedraw() が画面を上書きするので明示的なクリアは不要。
 void charAnimPlayStartup() {
+    playWarpIntro();   // ハイパースペースから通常空間へ
     spDrawBackground();
     spDrawStarfield(0, 0, 320, 240);
 
@@ -163,11 +192,16 @@ void charAnimPlayStartup() {
         startupBeep(lnotes[i], 140, 55); // 約195ms間隔で文字送りと同期
     }
 
-    // Subtitle + 締めのきらめき。E6→C6 と上から主音へ落として終止感を出す。
+    // Subtitle (タイプライター) + 締めのきらめき。
+    // E6→C6 と上から主音へ落として終止感を出す。
     M5.Lcd.setTextSize(1);
     M5.Lcd.setTextColor(SM_GREY, SM_BG);
-    M5.Lcd.setCursor(78, TY + 52);
-    M5.Lcd.print("   your space companion");
+    M5.Lcd.setCursor(96, TY + 52); // "your space companion" 20文字を中央寄せ
+    const char* sub = "your space companion";
+    for (const char* p = sub; *p; ++p) {
+        M5.Lcd.print(*p);
+        delay(22);
+    }
     startupBeep(1319, 90,  30); // E6 — 軽いきらめき
     startupBeep(1047, 280, 0);  // C6 — 主音で着地して終止
 

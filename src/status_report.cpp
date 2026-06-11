@@ -1,6 +1,8 @@
 #include "status_report.h"
 #include "space_ui.h"
 #include "remote.h"
+#include "fx.h"
+#include "world.h"
 #include <M5Stack.h>
 #include <Preferences.h>
 
@@ -93,6 +95,10 @@ void showMemorial(const Pet& pet, const Inventory& inv) {
     M5.Lcd.setCursor(48, 202); M5.Lcd.print("Press any button to go on");
 
     spCornerFrame(0, 0, 320, 240);
+
+    // main.cpp::handleDeath() がバックライトを 0 まで落としてから呼ぶので、
+    // 描画完了後に基準輝度まで静かにフェードインさせる (~0.5秒)。
+    fxRampTo(fxPhaseBrightness(worldIsNight()));
 
     // 別れの下降和音 (G4 E4 C4)。startupBeep 相当を直書き (mute で確実に切る)。
     const uint16_t fnotes[] = {392, 330, 262};

@@ -26,5 +26,16 @@ void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& n
 // Back 画面はメッセージ BOX が無い (ステータスで全領域を使う) ので呼ばないこと。
 void displayMessage(const String& msg);
 
+// Main 画面にスペースデブリのアイコンを junk 個 (0..JUNK_MAX) 描く。
+// キャラ描画ボックスの外側に置くので charAnimUpdate と干渉しない。
+// displayInit(Main) が自動で呼ぶほか、tick でデブリが増えた瞬間にも
+// main.cpp が直接呼ぶ (fullRedraw なしで追加分だけ出すため)。
+void displayJunk(uint8_t junk);
+
+// Main 画面の装飾一式 (環状惑星 / 夜の三日月 / デブリ) をまとめて描く。
+// displayInit(Main) が自動で呼ぶほか、イベント FX (fx.cpp) が背景を
+// 塗り戻した後の復元用に main.cpp からも呼ばれる。
+void displayMainDeco(uint8_t junk, bool night);
+
 // ボタンガイド帯 (最下段) だけを再描画。アクション選択変更時などに呼ぶ。
 void displayMenuBar(UIMode mode, int sel);

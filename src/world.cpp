@@ -33,25 +33,30 @@ static const int WORLD_EVENT_CHANCE = 15; // %
 //
 // applyRandomEvent: 重み付き抽選して効果を適用する本体。常に1つ起こして true。
 // 確率ゲート/卵チェックは呼び出し側 (worldRollEvent) が持つので、ここには無い。
-static bool applyRandomEvent(Pet& pet, Inventory& inv, String& outMsg) {
+static bool applyRandomEvent(Pet& pet, Inventory& inv, String& outMsg, WorldEventType& outType) {
     int r = (int)random(100);
     if (r < 30) {
         uint16_t c = 5 + (uint16_t)random(11); // 5..15
         inv.coins += c;
-        outMsg = "Meteor shower! +" + String(c) + " coins";
+        outMsg  = "Meteor shower! +" + String(c) + " coins";
+        outType = WorldEventType::Meteor;
     } else if (r < 55) {
         pet.hunger = min(100, (int)pet.hunger + 25);
-        outMsg = "Supply drone! +25 fuel";
+        outMsg  = "Supply drone! +25 fuel";
+        outType = WorldEventType::Supply;
     } else if (r < 75) {
         pet.happiness = min(100, (int)pet.happiness + 15);
-        outMsg = "Cosmic ray surge! +15 morale";
+        outMsg  = "Cosmic ray surge! +15 morale";
+        outType = WorldEventType::CosmicRay;
     } else if (r < 90) {
         int dmg = pet.health > 60 ? 5 : 10; // shield が厚いと被害軽減
         pet.health = max(0, (int)pet.health - dmg);
-        outMsg = "Solar flare! shields -" + String(dmg);
+        outMsg  = "Solar flare! shields -" + String(dmg);
+        outType = WorldEventType::Flare;
     } else {
         pet.age = min(255, (int)pet.age + 3);
-        outMsg = "Wormhole! time jumps ahead";
+        outMsg  = "Wormhole! time jumps ahead";
+        outType = WorldEventType::Wormhole;
     }
 
     pet.mood = pet.calcMood();
@@ -59,13 +64,14 @@ static bool applyRandomEvent(Pet& pet, Inventory& inv, String& outMsg) {
 }
 
 // 通常版: 卵期は除外し、WORLD_EVENT_CHANCE% を引いた時だけ発生させる。
-bool worldRollEvent(Pet& pet, Inventory& inv, String& outMsg) {
+bool worldRollEvent(Pet& pet, Inventory& inv, String& outMsg, WorldEventType& outType) {
+    outType = WorldEventType::None;
     if (stageForAge(pet.age) == STAGE_EGG) return false; // 卵は対象外
     if ((int)random(100) >= WORLD_EVENT_CHANCE) return false;
-    return applyRandomEvent(pet, inv, outMsg);
+    return applyRandomEvent(pet, inv, outMsg, outType);
 }
 
 // 検証版: 確率/卵ゲートを無視して必ず発生 (PC 遠隔の "event" コマンド用)。
-bool worldForceEvent(Pet& pet, Inventory& inv, String& outMsg) {
-    return applyRandomEvent(pet, inv, outMsg);
+bool worldForceEvent(Pet& pet, Inventory& inv, String& outMsg, WorldEventType& outType) {
+    return applyRandomEvent(pet, inv, outMsg, outType);
 }

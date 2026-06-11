@@ -19,7 +19,7 @@ Main → Act → Back → Main ...
 | 画面 | 内容 | A | B | C |
 |------|------|---|---|---|
 | **Main** | 宇宙背景 + キャラクター(128×128) + メッセージBOX | Gacha (NASA API) | Talk (Egg期/夜は無効) | → Act |
-| **Act** | 左: アクションリスト / 右: Fido生態tips | Move | OK | → Back |
+| **Act** | 左: アクションリスト (Feed/Play/Clean/Game/Shop) / 右: Fido生態tips | Move | OK | → Back |
 | **Back** | ステータス全表示（ステータス + カード統合） | Config | --- | → Main |
 | **Config** | 音量(ON/OFF) / 電源OFF / データ削除 | Move | Select | Close |
 
@@ -42,7 +42,8 @@ Main → Act → Back → Main ...
 | `status_report.h` | `showSettings()`, `showConfirmDialog()`, `showMemorial()` 宣言 |
 | `claude_client.h` | `askClaude()` 宣言 |
 | `remote.h` | PC遠隔操作 API (`remoteSync()`, `btnA/B/C()`) |
-| `world.h` | 昼夜サイクル (`worldIsNight()`) + ランダム宇宙イベント (`worldRollEvent()`) |
+| `world.h` | 昼夜サイクル (`worldIsNight()`) + ランダム宇宙イベント (`worldRollEvent()`, `WorldEventType`) |
+| `fx.h` | 演出API (バックライト調光 / 環境演出 / イベント別ミニアニメ) |
 | `nasa_gacha.h` | `NasaCargo` 構造体 (`NASA_CARGO_MAX=8`), `runNasaGacha/saveNasaCargo/loadNasaCargo` 宣言 |
 | `secrets.h` | WiFi認証情報 (`WIFI_SSID`, `WIFI_PASS`) — **gitignore済み、コミット不可** |
 | `secrets.h.example` | `secrets.h` のテンプレート (コミット可) |
@@ -62,6 +63,7 @@ Main → Act → Back → Main ...
 | `claude_client.cpp` | Wi-Fi + Anthropic API HTTP通信 |
 | `remote.cpp` | USBシリアル遠隔操作 (PC→M5Stack ボタン入力) |
 | `world.cpp` | 昼夜サイクル (millis 加速) + ランダム宇宙イベント抽選 |
+| `fx.cpp` | 演出専用 (瞬く星/流れ星/イベントFX/昼夜調光)。ゲームロジック非依存 |
 | `nasa_gacha.cpp` | WiFi接続 → NASA APOD API (HTTPS) → タイトル抽出 → NVS保存 |
 
 ---
@@ -76,6 +78,7 @@ struct Pet {
     uint8_t health;     // 0-100
     uint8_t age;        // tick毎に+1 (1tick=30秒)
     PetMood mood;       // Happy/Neutral/Hungry/Sleepy/Sick
+    uint8_t junk;       // 0-3 スペースデブリ数。Act の Clean で 0 に戻す
 };
 
 struct Inventory {
@@ -94,6 +97,8 @@ struct Inventory {
 - `hunger -= (night ? 1 : 2)`（夜は就寝中で半減・0クランプ）
 - `happiness -= 1`（**昼のみ**。夜は減らさない）
 - `hunger < 20` なら `health -= 1`
+- デブリ放置ペナルティ（**昼のみ**）: `happiness -= junk`、`junk >= 2` なら `health -= 1`
+- デブリ生成（**昼かつ非卵のみ**）: 20%/tick で `junk++`（max `JUNK_MAX`=3）
 - 夜かつ非危機なら `mood = Sleepy` に上書き
 - NVSに保存, Back画面なら即時再描画
 - `night` は `worldIsNight()` (world.cpp) が決める昼夜サイクル
@@ -116,26 +121,63 @@ RTC 非搭載のため**実時刻ではなく millis ベースの加速サイク
 - 周期: **昼 8分 + 夜 4分 = 12分で1日**（位相は NVS 非保存 = 電源OFFで昼から再開）
 - 夜の挙動: `tick()` の hunger 減衰半減・happiness 据え置き・mood=Sleepy、キャラは就寝表現（寝息 + zZ）、Main 右上に三日月
 - 夜の操作制限: **Talk** はそっと見るだけ（"Zzz... fast asleep"）、**Play** は寝起きで士気 −5
-- `main.cpp::loop()` で昼夜切替を検出したら1度だけ `fullRedraw()`（Back画面ではメッセージ抑制）
+- `main.cpp::loop()` で昼夜切替を検出したら1度だけ `fullRedraw()`（Back画面ではメッセージ抑制）+ `fxDayNightRamp()` でバックライトを滑らかに調光（昼 100 / 夜 45。ライブラリ既定は 80）
 
 ## ランダム宇宙イベント (world.cpp)
 
-`worldRollEvent()` を tick 毎に呼ぶ。**15%** で発生（卵期は対象外）。発生時は B5 988Hz のチャイム + メッセージBOX通知。
+`worldRollEvent()` を tick 毎に呼ぶ。**15%** で発生（卵期は対象外）。種別は `WorldEventType` enum で返り、**Main 画面では fx.cpp の種別別ミニアニメ（効果音込み・~0.6秒）**、それ以外の画面では B5 988Hz のチャイムを鳴らす。いずれもメッセージBOX通知付き。
 
-| イベント | 効果 | 重み |
-|----------|------|------|
-| Meteor shower | coins +5〜15 | 30 |
-| Supply drone | hunger +25 | 25 |
-| Cosmic ray surge | happiness +15 | 20 |
-| Solar flare | health −5 (health>60) / −10 | 15 |
-| Wormhole | age +3（進化が早まる） | 10 |
+| イベント | 効果 | 重み | Main 画面の演出 (fx.cpp) |
+|----------|------|------|--------------------------|
+| Meteor shower | coins +5〜15 | 30 | 流星痕4本が斜めに走る + 下降ブリップ |
+| Supply drone | hunger +25 | 25 | 補給クレートがパラシュート降下 |
+| Cosmic ray surge | happiness +15 | 20 | 垂直シャワー8本が明滅 + 上昇音 |
+| Solar flare | health −5 (health>60) / −10 | 15 | 白帯スイープ×2 + 全面フラッシュ + 警告2音 |
+| Wormhole | age +3（進化が早まる） | 10 | キャラ中心から同心円が広がる |
+
+## スペースデブリ＝掃除 (pet.cpp / display.cpp / main.cpp)
+
+たまごっちの「うんち→掃除」に相当するお世話ループ。Fido が**昼間にデブリ (宇宙ゴミ) を散らかし**、放置すると士気・体力が削れる。
+
+- **生成**: `Pet::tick()` 内で昼かつ非卵のとき 20%/tick (`JUNK_CHANCE`)。max `JUNK_MAX`=3。発生時は D5 587Hz の通知音 + メッセージBOX (`main.cpp` が tick 前後の `junk` 比較で検知)
+- **ペナルティ**: 昼のみ `happiness -= junk`/tick、`junk >= 2` で `health -= 1`/tick。夜は就寝中で免除
+- **掃除**: Act 画面の **Clean** (index 2)。`junk = 0` + 士気 +3×個数、A5 880Hz の完了音。デブリ 0 個なら "All clear!"
+- **表示**: Main 画面にアイコン (`displayJunk()`、キャラ描画ボックス外の固定3座標 `JUNK_POS` なのでアニメと干渉しない) / Back 画面 Mood 行に `Debris:n` (2個以上で白の警告色) / Advisor が `junk >= 2` で "Debris field! Clean up!"
+- **永続化**: NVSキー `junk`。転生時は 0 にリセット (新しい Pet の brace init に含まれる)
 
 ## 生死＆転生 (main.cpp::handleDeath / status_report.cpp::showMemorial)
 
 - `health == 0` が **`CRIT_LIMIT`=6 tick (3分)** 連続すると「離脱」（死）。連続数は `inv.critStreak` に**NVS永続**（電源OFFで放置が帳消しにならない）
-- 離脱時: 記録更新（`bestAge`/`bestBond`/`rebirths`）→ 追悼画面 `showMemorial()`（ボタン待ち）→ 転生
+- 離脱時: 記録更新（`bestAge`/`bestBond`/`rebirths`）→ `fxRampTo(0)` でバックライト消灯 → 追悼画面 `showMemorial()`（描画後にフェードイン → ボタン待ち）→ 転生
 - **転生の引き継ぎ**: ステータス・絆は初期化、**コイン (`coins`) と所有アイテム (`owned[]`) は継承**、記録3つは世代をまたいで残る
 - 転生直後は `charAnimReset()` で進化演出なしに Egg を再ロード
+
+## 演出 (fx.cpp / fx.h)
+
+ゲームロジックに触れない「見せ方」専用モジュール。すべて `space_ui.h` の決定論的背景復元 (`spDrawBackgroundRect`) を前提に動く。
+
+- **バックライト調光**: `fxInitBrightness/fxDayNightRamp/fxRampTo`。昼 100 / 夜 45 (PWM 0-255)。昼夜切替・追悼フェードで使用
+- **環境演出 (Main 画面のみ・非ブロッキング)**: `fxAmbientUpdate(night)` を毎フレーム呼ぶ
+  - 瞬く星: 安全地帯の固定8座標が6段階で明滅、ピークで十字のきらめき。消去は `spDrawBackgroundRect(3x3)`
+  - 流れ星: 右上の安全地帯 (x228..312, y36..93) を 12 step で流れる。夜は 8-28秒、昼は 15-45秒間隔
+- **イベントFX (Main 画面のみ・ブロッキング ~0.6秒)**: `fxEvent(WorldEventType)`。終了時に `charAnimRedraw()` + `fxAmbientReset()` を呼ぶが、**装飾 (惑星/月/デブリ) は消えるので呼び出し側が `displayMainDeco()` で復元する**
+- **キャッシュ無効化**: `fxAmbientReset()` は `fullRedraw()` が自動で呼ぶ
+- **FX 内の効果音は `fxBeep()` (tone→delay→mute)**: ブロッキング区間では `tone(freq,dur)` の自動停止が効かないため (`startupBeep` と同じ理由)
+
+### Main 画面の常設デコ (`displayMainDeco(junk, night)`)
+- 環状惑星 (左上 26,24。点列楕円の環、本体の後ろ側は非描画)
+- 夜のみ三日月 (右上 300,20。クレーター + ハロー光点付き)
+- スペースデブリ (`displayJunk`)
+- 全てキャラ描画ボックス (x96..224) の外側でアニメと干渉しない
+
+### 星雲 (space_ui.h::spInNebula)
+楕円2領域 (A: 中心 55,50 / B: 中心 282,95) の内側だけ、星空ハッシュの別ウィンドウで超低輝度の塵 (SM_DIV/SM_HDR) を撒く。**座標決定論なので部分再描画でも継ぎ目なし**
+
+### メッセージBOXのタイプライター表示 (display.cpp::displayMessage)
+1文字ずつ送出 (60文字超は 2ms/字、以下は 6ms/字)。空メッセージは枠のみ即描画
+
+### 起動シーケンス (char_anim.cpp::charAnimPlayStartup)
+ワープ演出 (~0.5秒、放射状の星 streak + 200→1390Hz スイープ) → 星空展開 → "FIDO" 文字 + C メジャーアルペジオ → サブタイトルのタイプライター
 
 ---
 
@@ -270,6 +312,7 @@ a/b/c は 1 文字で即時処理、デバッグコマンドは**改行で確定
 | `g<n>` | age | 0-255 | `g80` |
 | `m<n>` | coins (money) | 0-9999 | `m999` |
 | `k<n>` | bond (絆/kizuna) | 0-1000 | `k800` |
+| `j<n>` | junk (デブリ数) | 0-3 | `j3` |
 
 `remoteSync()` が行バッファに溜めて解析し、`remoteDebugApply(pet, inv)` が
 `main.cpp::loop()` 内で反映 → `saveAll()` → `fullRedraw()`。範囲外は自動クランプ、
@@ -307,7 +350,7 @@ a/b/c は 1 文字で即時処理、デバッグコマンドは**改行で確定
   Chrome / Edge で開き [接続] → COM ポート選択。A/B/C をクリック、または
   キーボードの A/B/C キーで操作。`[MODE] -> Xxx` ログを拾ってボタンの
   ヒント表示を現在の画面に追従させる。DEBUG セクションで値設定 (hunger/happy/
-  health/age/coins/bond)、ACTION セクションで Night/Day/Auto/Event/Die を送れる。
+  health/age/coins/bond/debris)、ACTION セクションで Night/Day/Auto/Event/Die を送れる。
 - シリアルモニタ (`pio device monitor`) で `a`/`b`/`c` や `h50`/`m999`/`night`/
   `event`/`die` 等を直接打っても可。
 
@@ -315,7 +358,7 @@ a/b/c は 1 文字で即時処理、デバッグコマンドは**改行で確定
 
 ## 永続化 (ESP32 Preferences NVS)
 
-namespace: `"fido"` キー: `hunger`, `happy`, `health`, `age`, `coins`, `bond`, `it0`-`it13`, `vol`, `nc`, `nc0`-`nc7`, `crit`, `reb`, `bAge`, `bBond`
+namespace: `"fido"` キー: `hunger`, `happy`, `health`, `age`, `junk`, `coins`, `bond`, `it0`-`it13`, `vol`, `nc`, `nc0`-`nc7`, `crit`, `reb`, `bAge`, `bBond`
 
 ---
 

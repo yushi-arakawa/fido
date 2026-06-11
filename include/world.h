@@ -19,12 +19,16 @@ bool worldIsNight();
 enum class DayNightOverride { Auto, ForceDay, ForceNight };
 void worldSetOverride(DayNightOverride o);
 
+// 宇宙イベントの種別。fx.cpp がイベント毎に異なるミニアニメを出すために使う。
+// world.cpp::applyRandomEvent() の抽選結果と1対1で対応する。
+enum class WorldEventType { None, Meteor, Supply, CosmicRay, Flare, Wormhole };
+
 // tick 毎に呼ぶランダム宇宙イベント。WORLD_EVENT_CHANCE% で何かが起こり、
-// pet/inv に効果を適用して outMsg に通知文をセットし true を返す。
-// 卵 (STAGE_EGG) 期はまだ世界と関わらないので必ず false。
+// pet/inv に効果を適用して outMsg/outType に通知文と種別をセットし true を返す。
+// 卵 (STAGE_EGG) 期はまだ世界と関わらないので必ず false (outType=None)。
 // 効果適用後に pet.mood を再計算するので呼び出し側での再計算は不要。
-bool worldRollEvent(Pet& pet, Inventory& inv, String& outMsg);
+bool worldRollEvent(Pet& pet, Inventory& inv, String& outMsg, WorldEventType& outType);
 
 // 確率ゲートと卵チェックを無視して必ず1つイベントを発生させる (検証用)。
 // remote.cpp の "event" コマンドから呼ばれる。常に true。
-bool worldForceEvent(Pet& pet, Inventory& inv, String& outMsg);
+bool worldForceEvent(Pet& pet, Inventory& inv, String& outMsg, WorldEventType& outType);
