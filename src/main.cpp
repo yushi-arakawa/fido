@@ -71,6 +71,10 @@ static void fullRedraw(const String& msg = "") {
     if (msg.length() > 0) displayMessage(msg);
 }
 
+static void updatePetMoodForNow() {
+    pet.updateMood(worldIsNight());
+}
+
 // ─── アクション実行 (Act 画面で B ボタンを押した時) ─────────────────────
 // idx は ACT_LABELS の index と一致 (display.cpp 参照):
 //   0=Feed 1=Play 2=Clean 3=Game 4=Shop
@@ -81,19 +85,19 @@ static void doAct(int idx) {
         case 0: // Feed: 空腹を大きく回復、幸福もちょっと回復
             pet.hunger    = min(100, (int)pet.hunger    + 30);
             pet.happiness = min(100, (int)pet.happiness + 5);
-            pet.mood      = pet.calcMood();
+            updatePetMoodForNow();
             displayMessage("Yum! Nom nom nom...");
             break;
         case 1: // Play: 幸福を回復するが代わりに空腹が進む
             if (worldIsNight()) {
                 // 夜は就寝中。無理に遊ばせると寝起きで機嫌を損ねる (士気-5)。
                 pet.happiness = max(0, (int)pet.happiness - 5);
-                pet.mood      = pet.calcMood();
+                updatePetMoodForNow();
                 displayMessage("Zzz... too sleepy to play.");
             } else {
                 pet.happiness = min(100, (int)pet.happiness + 20);
                 pet.hunger    = max(0,   (int)pet.hunger    - 10);
-                pet.mood      = pet.calcMood();
+                updatePetMoodForNow();
                 displayMessage("Wheee! So fun!");
             }
             break;
@@ -104,7 +108,7 @@ static void doAct(int idx) {
                 int n = pet.junk;
                 pet.junk      = 0;
                 pet.happiness = min(100, (int)pet.happiness + 3 * n);
-                pet.mood      = pet.calcMood();
+                updatePetMoodForNow();
                 M5.Speaker.tone(TONE_CLEAN, 90);
                 displayMessage("Swept " + String(n) + " debris into the void!");
                 // アイコンの消去は不要: Main へ戻る時の fullRedraw で消える
@@ -112,13 +116,14 @@ static void doAct(int idx) {
             break;
         case 3: { // Game: ミニゲーム選択画面に入り、稼いだコインを加算
             uint16_t earned = runGameMenu();
-            inv.coins += earned;
+            addCoins(inv, earned);
             saveAll(pet, inv);
             fullRedraw("Game over! +" + String(earned) + " coins");
             break;
         }
         case 4: // Shop: ショップ画面 (中で applyItem→saveAll される)
             runShop(pet, inv);
+            updatePetMoodForNow();
             saveAll(pet, inv); // 念のため戻り後も保存 (重複コストは無視できる)
             fullRedraw("Thanks for shopping!");
             break;
@@ -181,6 +186,7 @@ void setup() {
 
     // バックライトを現在の昼夜サイクルに合わせて初期化 (昼 100 / 夜 45)。
     fxInitBrightness(worldIsNight());
+    updatePetMoodForNow();
 
     charAnimPlayStartup();
     fullRedraw("Hello! I'm " + pet.name + "!");
@@ -201,6 +207,7 @@ void loop() {
     // "h50"/"m999"/"k800" 等を受けたら pet/inv に反映 → 保存 → 全画面再描画。
     // age 変更時は fullRedraw() 内の charAnimRedraw() でスプライトも更新される。
     if (remoteDebugApply(pet, inv)) {
+        updatePetMoodForNow();
         saveAll(pet, inv);
         fullRedraw();
     }
@@ -226,6 +233,7 @@ void loop() {
             String m;
             WorldEventType t;
             worldForceEvent(pet, inv, m, t);
+            updatePetMoodForNow();
             saveAll(pet, inv);
             Serial.printf("[EVENT] (forced) %s\n", m.c_str());
             if (uiMode == UIMode::Back) {
@@ -260,6 +268,7 @@ void loop() {
         lastNight = night;
         const char* tmsg = night ? "Zzz... Fido drifts to sleep." : "Good morning, Fido!";
         Serial.printf("[DAYNIGHT] -> %s\n", night ? "night" : "day");
+        pet.updateMood(night);
         fullRedraw(uiMode == UIMode::Back ? "" : tmsg);
         fxDayNightRamp(night); // バックライトを昼夜の基準輝度へ滑らかに遷移
     }
@@ -313,6 +322,7 @@ void loop() {
 
     // ── Act 画面 ────────────────────────────────────────────────────────
     if (uiMode == UIMode::Act) {
+        displayActTipsMaybeUpdate();
         if (btnA()) {
             M5.Speaker.tone(TONE_A, TONE_DUR_MS);
             actSel = (actSel + 1) % 5;
@@ -352,6 +362,7 @@ void loop() {
         String evMsg;
         WorldEventType evType;
         bool ev = worldRollEvent(pet, inv, evMsg, evType);
+        if (ev) pet.updateMood(night);
 
         saveAll(pet, inv);
         Serial.printf("[TICK] age:%d energy:%d morale:%d shield:%d bond:%d junk:%d crit:%d%s\n",

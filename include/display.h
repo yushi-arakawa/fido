@@ -20,6 +20,7 @@ void displayInit(UIMode mode, const Pet& pet, const Inventory& inv, const NasaCa
 // 背景には触れずコンテンツ部分だけ更新する軽量版。
 // ナビゲーション中はこちらを使うと星空の再描画が省けてチラつかない。
 void displayActContent(int sel);
+void displayActTipsMaybeUpdate();
 void displayBackContent(const Pet& pet, const Inventory& inv, const NasaCargo& nasa);
 
 // メッセージ BOX (画面下) だけを更新。Main / Act 画面で使う。

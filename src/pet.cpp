@@ -11,6 +11,12 @@ PetMood Pet::calcMood() const {
     return PetMood::Neutral;
 }
 
+void Pet::updateMood(bool night) {
+    mood = calcMood();
+    if (night && (mood == PetMood::Happy || mood == PetMood::Neutral))
+        mood = PetMood::Sleepy;
+}
+
 // デブリ生成確率 (%/tick)。昼は 16tick (8分) あるので 20% なら平均 ~3個/日。
 // JUNK_MAX で打ち止めなので、1日掃除しないとほぼ確実に満杯になる感覚。
 static const int JUNK_CHANCE = 20;
@@ -49,10 +55,7 @@ void Pet::tick(bool night) {
         junk++;
     }
 
-    mood = calcMood();
-
     // 夜かつ危機的でない (Happy/Neutral) なら「眠っている」表現に上書き。
     // Hungry/Sick は夜でも優先して見せる (放置に気付けるように)。
-    if (night && (mood == PetMood::Happy || mood == PetMood::Neutral))
-        mood = PetMood::Sleepy;
+    updateMood(night);
 }
