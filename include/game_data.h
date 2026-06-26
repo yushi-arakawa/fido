@@ -7,6 +7,7 @@
 //   - Inventory.owned[14] の固定サイズ (下記コメント参照)
 //   - shop.cpp / display.cpp の Cargo 表示ループ
 static const int ITEM_COUNT = 14;
+static const uint16_t COIN_MAX = 9999;
 
 // アイテムの静的定義 (フラッシュ常駐の const)。NVS には保存しない。
 struct ItemDef {
@@ -50,3 +51,6 @@ void loadAll(Pet& pet, Inventory& inv);
 
 // アイテム購入直後にステータスを反映するヘルパー (shop.cpp が使用)。
 void applyItem(Pet& pet, int idx);
+
+// 報酬コインを上限付きで加算する。uint16_t の wraparound を避ける。
+void addCoins(Inventory& inv, uint16_t amount);

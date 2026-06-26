@@ -29,6 +29,10 @@ struct Pet {
 
     // hunger/happiness/health から mood を決定する純粋関数。
     PetMood calcMood() const;
+
+    // 現在のステータスと昼夜フェーズを mood に反映する。
+    // night=true のときも Hungry/Sick は優先し、危機でなければ Sleepy にする。
+    void updateMood(bool night = false);
 };
 
 // 成長ステージ。display と char_anim で参照する単一の真実 (single source of truth)。

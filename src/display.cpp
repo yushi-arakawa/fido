@@ -22,7 +22,8 @@ static const int SX     = 8;    // 各画面のテキスト基準 X
 // 2行に分かれた tips を 10秒ごとに巡回表示する (displayActContent の
 // `(millis() / 10000) % 10` で index を決定)。
 // 増やす場合は L1/L2 を必ず同数で揃え、ループ側の `% 10` も合わせて更新する。
-static const char* TIPS_L1[10] = {
+static const uint8_t TIP_COUNT = 10;
+static const char* TIPS_L1[TIP_COUNT] = {
     "Feeds on stray photons",
     "Stretches 3 light-years",
     "Purring generates",
@@ -34,7 +35,7 @@ static const char* TIPS_L1[10] = {
     "Hairballs contain",
     "Tail wags slightly",
 };
-static const char* TIPS_L2[10] = {
+static const char* TIPS_L2[TIP_COUNT] = {
     "near event horizons.",
     "when yawning.",
     "micro-singularities.",
@@ -46,6 +47,7 @@ static const char* TIPS_L2[10] = {
     "compressed spacetime.",
     "warp local gravity.",
 };
+static uint8_t lastActTip = 255;
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -168,30 +170,11 @@ void displayJunk(uint8_t junk) {
 // 行高 26px × 5行 = 130px で 22..152 に収まる (MSG_Y=155 が下限)。
 static const char* ACT_LABELS[] = { "Feed", "Play", "Clean", "Game", "Shop" };
 
-void displayActContent(int sel) {
-    Serial.printf("[ACT] selected: %s\n", ACT_LABELS[sel]);
-    // Left panel: action list
-    M5.Lcd.fillRect(0, 0, PDIV, MSG_Y, SM_BG);
-    M5.Lcd.fillRect(0, 0, PDIV, 22, SM_HDR);
-    M5.Lcd.setTextColor(SM_WHITE, SM_HDR);
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.setCursor(SX, 4);
-    M5.Lcd.print("Actions");
+static uint8_t currentTipIndex() {
+    return (uint8_t)((millis() / 10000) % TIP_COUNT);
+}
 
-    for (int i = 0; i < 5; i++) {
-        int y = 22 + i * 26;
-        bool active = (i == sel);
-        uint16_t bg = active ? SM_SEL : SM_BG;
-        M5.Lcd.fillRect(0, y, PDIV, 26, bg);
-        if (active) M5.Lcd.fillRect(0, y, 3, 26, SM_WHITE);
-        M5.Lcd.setTextSize(2);
-        M5.Lcd.setTextColor(active ? SM_WHITE : SM_GREY, bg);
-        M5.Lcd.setCursor(SX + 4, y + 5);
-        M5.Lcd.printf("%s %s", active ? ">" : " ", ACT_LABELS[i]);
-    }
-    spCornerFrame(0, 0, PDIV, MSG_Y);
-
-    // Right panel: Fido tips
+static void displayActTipsPanel(uint8_t tip) {
     int RX = PDIV + 8;
     int RW = 320 - PDIV;
     M5.Lcd.fillRect(PDIV, 0, RW, MSG_Y, SM_BG);
@@ -201,10 +184,9 @@ void displayActContent(int sel) {
     M5.Lcd.setCursor(RX, 7);
     M5.Lcd.print("FIDO FACTS");
 
-    uint8_t tip = (millis() / 10000) % 10;
     M5.Lcd.setTextColor(SM_DIM, SM_BG);
     M5.Lcd.setCursor(RX, 30);
-    M5.Lcd.printf("tip %d/10", tip + 1);
+    M5.Lcd.printf("tip %d/%d", tip + 1, TIP_COUNT);
 
     M5.Lcd.setTextColor(SM_LIGHT, SM_BG);
     M5.Lcd.setCursor(RX, 50);
@@ -236,6 +218,38 @@ void displayActContent(int sel) {
     }
 
     spCornerFrame(PDIV, 0, RW, MSG_Y);
+    lastActTip = tip;
+}
+
+void displayActContent(int sel) {
+    Serial.printf("[ACT] selected: %s\n", ACT_LABELS[sel]);
+    // Left panel: action list
+    M5.Lcd.fillRect(0, 0, PDIV, MSG_Y, SM_BG);
+    M5.Lcd.fillRect(0, 0, PDIV, 22, SM_HDR);
+    M5.Lcd.setTextColor(SM_WHITE, SM_HDR);
+    M5.Lcd.setTextSize(2);
+    M5.Lcd.setCursor(SX, 4);
+    M5.Lcd.print("Actions");
+
+    for (int i = 0; i < 5; i++) {
+        int y = 22 + i * 26;
+        bool active = (i == sel);
+        uint16_t bg = active ? SM_SEL : SM_BG;
+        M5.Lcd.fillRect(0, y, PDIV, 26, bg);
+        if (active) M5.Lcd.fillRect(0, y, 3, 26, SM_WHITE);
+        M5.Lcd.setTextSize(2);
+        M5.Lcd.setTextColor(active ? SM_WHITE : SM_GREY, bg);
+        M5.Lcd.setCursor(SX + 4, y + 5);
+        M5.Lcd.printf("%s %s", active ? ">" : " ", ACT_LABELS[i]);
+    }
+    spCornerFrame(0, 0, PDIV, MSG_Y);
+
+    displayActTipsPanel(currentTipIndex());
+}
+
+void displayActTipsMaybeUpdate() {
+    uint8_t tip = currentTipIndex();
+    if (tip != lastActTip) displayActTipsPanel(tip);
 }
 
 // ─── Back 画面 (ステータス全表示) ──────────────────────────────────────

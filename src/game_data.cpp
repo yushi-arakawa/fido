@@ -36,6 +36,11 @@ void applyItem(Pet& pet, int idx) {
     pet.mood      = pet.calcMood();
 }
 
+void addCoins(Inventory& inv, uint16_t amount) {
+    uint32_t next = (uint32_t)inv.coins + amount;
+    inv.coins = (next > COIN_MAX) ? COIN_MAX : (uint16_t)next;
+}
+
 // 全データを NVS に保存。30秒 tick ごとに呼ばれるので
 // 余計な書き込みは増やさないこと (フラッシュ寿命に直結)。
 void saveAll(const Pet& pet, const Inventory& inv) {
@@ -73,7 +78,7 @@ void loadAll(Pet& pet, Inventory& inv) {
     pet.health    = p.getUChar("health", 100);
     pet.age       = p.getUChar("age",    0);
     pet.junk      = min(p.getUChar("junk", 0), JUNK_MAX);
-    inv.coins     = p.getUShort("coins", 0);
+    inv.coins     = min(p.getUShort("coins", 0), COIN_MAX);
     inv.bond      = p.getUShort("bond",  0);
     for (int i = 0; i < ITEM_COUNT; i++) {
         char key[8];

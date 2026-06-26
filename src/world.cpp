@@ -37,7 +37,7 @@ static bool applyRandomEvent(Pet& pet, Inventory& inv, String& outMsg, WorldEven
     int r = (int)random(100);
     if (r < 30) {
         uint16_t c = 5 + (uint16_t)random(11); // 5..15
-        inv.coins += c;
+        addCoins(inv, c);
         outMsg  = "Meteor shower! +" + String(c) + " coins";
         outType = WorldEventType::Meteor;
     } else if (r < 55) {

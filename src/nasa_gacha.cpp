@@ -8,7 +8,6 @@
 
 // ─── 設定値 ─────────────────────────────────────────────────────────────
 static const uint32_t WIFI_TIMEOUT_MS  = 10000; // WiFi 接続タイムアウト
-static const int      STORED_TITLE_MAX = 47;    // NasaCargo.items 1要素分 (+null=48)
 static const int      DISPLAY_TITLE_MAX = 39;   // メッセージBOX で "Discovery: <39文字>" がギリ
 // NASA APOD は 1995-06-16 が初回。安全側で 2000-2025 の範囲を使う。
 static const int DATE_YEAR_BASE  = 2000;
@@ -71,9 +70,9 @@ String runNasaGacha(NasaCargo& cargo) {
         String fullTitle = extractTitle(body);
         if (fullTitle.length() > 0) {
             // 保存用 (Back 画面の1行に収まる長さに切り詰め)
-            String stored = fullTitle.length() > STORED_TITLE_MAX
-                          ? fullTitle.substring(0, STORED_TITLE_MAX) : fullTitle;
-            stored.toCharArray(cargo.items[cargo.count], STORED_TITLE_MAX + 1);
+            String stored = fullTitle.length() > NASA_TITLE_MAX
+                          ? fullTitle.substring(0, NASA_TITLE_MAX) : fullTitle;
+            stored.toCharArray(cargo.items[cargo.count], NASA_TITLE_MAX + 1);
             cargo.count++;
             // 表示用 ("Discovery: <タイトル>" の形でメッセージBOX に収まる長さ)
             title = fullTitle.length() > DISPLAY_TITLE_MAX
@@ -113,7 +112,7 @@ void loadNasaCargo(NasaCargo& cargo) {
         char key[5];
         snprintf(key, sizeof(key), "nc%d", i);
         String s = p.getString(key, "");
-        s.toCharArray(cargo.items[i], STORED_TITLE_MAX + 1);
+        s.toCharArray(cargo.items[i], NASA_TITLE_MAX + 1);
     }
     p.end();
 }

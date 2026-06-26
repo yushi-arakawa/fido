@@ -4,12 +4,13 @@
 // カーゴの収容上限。Back 画面 / NVS キー数に直結するので軽率に増やさない。
 // 増やす場合は saveNasaCargo / loadNasaCargo のキー命名 ("nc%d") の桁も確認。
 #define NASA_CARGO_MAX 8
+static const int NASA_TITLE_MAX = 47;
 
 // NASA APOD ガチャで集めたタイトルのインベントリ。
 // 47 文字制限は Back 画面の幅 (text size 1 で 1行に収まる長さ) に基づく。
 // 表示時はさらに 320px 幅で折り返される可能性あり。
 struct NasaCargo {
-    char    items[NASA_CARGO_MAX][48]; // 各 47 文字 + null 終端
+    char    items[NASA_CARGO_MAX][NASA_TITLE_MAX + 1]; // 各 47 文字 + null 終端
     uint8_t count;                     // 現在の登録件数 (0..NASA_CARGO_MAX)
 };
 
